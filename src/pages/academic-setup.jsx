@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useMemo, useState } from "react";
 import {
   CalendarDays,
-  Layers,
   BookOpen,
   UsersRound,
   Plus,
@@ -17,16 +16,30 @@ const inputClass =
   "w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none focus:border-slate-400 focus:bg-white";
 
 const tabs = [
-  { key: "school_years", label: "School Years", icon: CalendarDays },
-  { key: "semesters", label: "Semesters", icon: Layers },
-  { key: "strands", label: "Strands", icon: UsersRound },
-  { key: "subjects", label: "Subjects", icon: BookOpen },
-  { key: "sections", label: "Sections", icon: UsersRound },
+  {
+    key: "school_years",
+    label: "School Years",
+    icon: CalendarDays,
+  },
+  {
+    key: "strands",
+    label: "Strands",
+    icon: UsersRound,
+  },
+  {
+    key: "subjects",
+    label: "Subjects",
+    icon: BookOpen,
+  },
+  {
+    key: "sections",
+    label: "Sections",
+    icon: UsersRound,
+  },
 ];
 
 const sortFields = {
   school_years: "start_date",
-  semesters: "start_date",
   strands: "code",
   subjects: "subject_code",
   sections: "section_name",
@@ -86,20 +99,14 @@ function formatDate(value) {
   });
 }
 
-function formatSemester(value) {
-  if (value === "first" || Number(value) === 1) return "First Semester";
-  if (value === "second" || Number(value) === 2) return "Second Semester";
-  return value || "—";
-}
 
 function StatusBadge({ status }) {
   return (
     <span
-      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-        status === "active"
-          ? "bg-green-100 text-green-700"
-          : "bg-gray-100 text-gray-500"
-      }`}
+      className={`rounded-full px-2.5 py-1 text-xs font-medium ${status === "active"
+        ? "bg-green-100 text-green-700"
+        : "bg-gray-100 text-gray-500"
+        }`}
     >
       {formatStatus(status)}
     </span>
@@ -183,35 +190,6 @@ function buildConfigs(records) {
         statusColumn,
       ],
     },
-    semesters: {
-      singular: "Semester",
-      defaults: {
-        school_year_id: "",
-        name: "first",
-        start_date: "",
-        end_date: "",
-        status: "active",
-      },
-      fields: [
-        selectField("school_year_id", "School year", years),
-        selectField("name", "Semester", [
-          { value: "first", label: "First Semester" },
-          { value: "second", label: "Second Semester" },
-        ]),
-        ...dateFields,
-        statusField,
-      ],
-      columns: [
-        { label: "School Year", render: (row) => yearName(row.school_year_id) },
-        { label: "Semester", render: (row) => formatSemester(row.name) },
-        {
-          label: "Dates",
-          render: (row) =>
-            `${formatDate(row.start_date)} – ${formatDate(row.end_date)}`,
-        },
-        statusColumn,
-      ],
-    },
     strands: {
       singular: "Strand",
       defaults: { code: "", name: "", description: "", status: "active" },
@@ -230,34 +208,70 @@ function buildConfigs(records) {
     },
     subjects: {
       singular: "Subject",
+
       defaults: {
         subject_code: "",
         subject_name: "",
         grade_level: "11",
-        semester_number: "1",
         subject_type: "core",
         strand_id: "",
         status: "active",
       },
+
       fields: [
-        textField("subject_code", "Subject code", "GEN-MATH"),
-        textField("subject_name", "Subject name", "General Mathematics"),
-        selectField("grade_level", "Grade level", gradeOptions),
-        selectField("semester_number", "Semester", [
-          { value: "1", label: "First Semester" },
-          { value: "2", label: "Second Semester" },
-        ]),
-        selectField("subject_type", "Subject type", [
-          { value: "core", label: "Core" },
-          { value: "applied", label: "Applied" },
-          { value: "specialized", label: "Specialized" },
-        ]),
-        selectField("strand_id", "Strand", [
-          { value: "", label: "All strands" },
-          ...strands,
-        ], false),
+        textField(
+          "subject_code",
+          "Subject code",
+          "GEN-MATH",
+        ),
+
+        textField(
+          "subject_name",
+          "Subject name",
+          "General Mathematics",
+        ),
+
+        selectField(
+          "grade_level",
+          "Grade level",
+          gradeOptions,
+        ),
+
+        selectField(
+          "subject_type",
+          "Subject type",
+          [
+            {
+              value: "core",
+              label: "Core",
+            },
+            {
+              value: "applied",
+              label: "Applied",
+            },
+            {
+              value: "specialized",
+              label: "Specialized",
+            },
+          ],
+        ),
+
+        selectField(
+          "strand_id",
+          "Strand",
+          [
+            {
+              value: "",
+              label: "All strands",
+            },
+            ...strands,
+          ],
+          false,
+        ),
+
         statusField,
       ],
+
       columns: [
         {
           label: "Subject",
@@ -268,17 +282,38 @@ function buildConfigs(records) {
                 name={row.subject_name}
                 className="h-12 w-20 shrink-0 rounded-lg"
               />
+
               <div>
-                <p className="font-medium text-gray-900">{row.subject_name}</p>
-                <p className="text-xs text-gray-400">{row.subject_code}</p>
+                <p className="font-medium text-gray-900">
+                  {row.subject_name}
+                </p>
+
+                <p className="text-xs text-gray-400">
+                  {row.subject_code}
+                </p>
               </div>
             </div>
           ),
         },
-        { label: "Level", render: (row) => `Grade ${row.grade_level}` },
-        { label: "Semester", render: (row) => formatSemester(row.semester_number) },
-        { label: "Type", render: (row) => formatStatus(row.subject_type) },
-        { label: "Strand", render: (row) => strandName(row.strand_id) },
+
+        {
+          label: "Level",
+          render: (row) =>
+            `Grade ${row.grade_level}`,
+        },
+
+        {
+          label: "Type",
+          render: (row) =>
+            formatStatus(row.subject_type),
+        },
+
+        {
+          label: "Strand",
+          render: (row) =>
+            strandName(row.strand_id),
+        },
+
         statusColumn,
       ],
     },
@@ -313,7 +348,6 @@ export default function AcademicSetup() {
   const [activeTab, setActiveTab] = useState("school_years");
   const [records, setRecords] = useState({
     school_years: [],
-    semesters: [],
     strands: [],
     subjects: [],
     sections: [],
@@ -335,6 +369,140 @@ export default function AcademicSetup() {
   const configs = buildConfigs(records);
   const activeConfig = configs[activeTab];
 
+  const groupedSections = useMemo(() => {
+    const strandLookup = new Map(
+      records.strands.map((strand) => [
+        strand.id,
+        strand,
+      ]),
+    );
+
+    const groups = new Map();
+
+    records.sections.forEach((section) => {
+      const strand =
+        strandLookup.get(section.strand_id) || null;
+
+      const groupKey =
+        strand?.id || "unassigned-strand";
+
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          id: groupKey,
+          strand,
+          sections: [],
+        });
+      }
+
+      groups.get(groupKey).sections.push(section);
+    });
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+
+        sections: [...group.sections].sort(
+          (first, second) =>
+            String(first.section_name || "").localeCompare(
+              String(second.section_name || ""),
+              undefined,
+              {
+                numeric: true,
+                sensitivity: "base",
+              },
+            ),
+        ),
+      }))
+      .sort((first, second) => {
+        if (!first.strand && second.strand) return 1;
+        if (first.strand && !second.strand) return -1;
+
+        const firstName =
+          first.strand?.code ||
+          first.strand?.name ||
+          "";
+
+        const secondName =
+          second.strand?.code ||
+          second.strand?.name ||
+          "";
+
+        return firstName.localeCompare(
+          secondName,
+          undefined,
+          {
+            numeric: true,
+            sensitivity: "base",
+          },
+        );
+      });
+  }, [records.sections, records.strands]);
+
+  const groupedSubjects = useMemo(() => {
+    const groups = new Map();
+
+    records.subjects.forEach((subject) => {
+      const subjectType =
+        String(subject.subject_type || "uncategorized")
+          .trim()
+          .toLowerCase();
+
+      if (!groups.has(subjectType)) {
+        groups.set(subjectType, {
+          type: subjectType,
+          subjects: [],
+        });
+      }
+
+      groups.get(subjectType).subjects.push(subject);
+    });
+
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+
+        subjects: [...group.subjects].sort(
+          (first, second) =>
+            String(first.subject_name || "").localeCompare(
+              String(second.subject_name || ""),
+              undefined,
+              {
+                numeric: true,
+                sensitivity: "base",
+              },
+            ),
+        ),
+      }))
+      .sort((first, second) =>
+        first.type.localeCompare(
+          second.type,
+          undefined,
+          {
+            sensitivity: "base",
+          },
+        ),
+      );
+  }, [records.subjects]);
+
+  function getStrandName(strandId) {
+    if (!strandId) return "All strands";
+
+    const strand = records.strands.find(
+      (record) => record.id === strandId,
+    );
+
+    return strand?.code || "Unknown strand";
+  }
+
+  function getSchoolYearName(schoolYearId) {
+    return (
+      records.school_years.find(
+        (schoolYear) =>
+          schoolYear.id === schoolYearId,
+      )?.name || "Unknown school year"
+    );
+  }
+
   useEffect(() => {
     let active = true;
 
@@ -346,7 +514,7 @@ export default function AcademicSetup() {
               .from(key)
               .select("*")
               .order(sortFields[key], {
-                ascending: !["school_years", "semesters"].includes(key),
+                ascending: key !== "school_years",
               }),
           ),
         );
@@ -451,7 +619,6 @@ export default function AcademicSetup() {
   function createPayload(entity) {
     const payload = {};
 
-    // Only send editable database fields.
     for (const field of configs[entity].fields) {
       const raw = form[field.name] ?? "";
       const value = typeof raw === "string" ? raw.trim() : raw;
@@ -472,9 +639,11 @@ export default function AcademicSetup() {
     }
 
     if (entity === "subjects") {
-      payload.semester_number = Number(payload.semester_number);
-      payload.strand_id = payload.strand_id || null;
-      payload.subject_code = payload.subject_code.toUpperCase();
+      payload.strand_id =
+        payload.strand_id || null;
+
+      payload.subject_code =
+        payload.subject_code.toUpperCase();
     }
 
     if (entity === "strands") {
@@ -665,7 +834,7 @@ export default function AcademicSetup() {
       <div>
         <h1 className="text-xl font-bold text-gray-900">Academic Setup</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Manage school years, semesters, strands, subjects, and sections.
+          Manage school years, strands, subjects, and sections.
         </p>
       </div>
 
@@ -676,11 +845,10 @@ export default function AcademicSetup() {
             type="button"
             disabled={saving}
             onClick={() => setActiveTab(key)}
-            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${
-              activeTab === key
-                ? "border-slate-800 text-slate-800"
-                : "border-transparent text-gray-500 hover:text-gray-900"
-            }`}
+            className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium ${activeTab === key
+              ? "border-slate-800 text-slate-800"
+              : "border-transparent text-gray-500 hover:text-gray-900"
+              }`}
           >
             <Icon className="h-4 w-4" />{label}
           </button>
@@ -705,58 +873,379 @@ export default function AcademicSetup() {
       {pageError && <p role="alert" className="rounded-lg bg-red-50 p-4 text-sm text-red-700">{pageError}</p>}
       {notice && <p role="status" className="rounded-lg bg-amber-50 p-4 text-sm text-amber-800">{notice}</p>}
 
-      <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
-        <table className="w-full min-w-[760px] text-sm">
-          <thead>
-            <tr className="bg-gray-50 text-left text-gray-500">
-              {activeConfig.columns.map((column) => (
-                <th key={column.label} className="px-5 py-3 font-medium">{column.label}</th>
-              ))}
-              <th className="px-5 py-3 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!loading && records[activeTab].map((record) => (
-              <tr key={record.id} className="border-t border-gray-100">
-                {activeConfig.columns.map((column) => (
-                  <td key={column.label} className="px-5 py-3.5 text-gray-600">
-                    {column.render(record)}
-                  </td>
-                ))}
-                <td className="px-5 py-3.5">
-                  <div className="flex justify-end gap-1">
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => openModal(record)}
-                      aria-label="Edit record"
-                      className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={() => handleDelete(record)}
-                      aria-label="Delete record"
-                      className="rounded-lg p-2 text-red-500 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+      {activeTab === "sections" ? (
+        <div className="space-y-6">
+          {loading && (
+            <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center text-sm text-gray-400 shadow-sm">
+              Loading sections...
+            </div>
+          )}
+
+          {!loading && groupedSections.length === 0 && (
+            <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center text-sm text-gray-400 shadow-sm">
+              No sections found.
+            </div>
+          )}
+
+          {!loading &&
+            groupedSections.map(
+              ({
+                id,
+                strand,
+                sections: strandSections,
+              }) => (
+                <section
+                  key={id}
+                  className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-lg bg-slate-800 px-3 py-1 text-sm font-bold text-white">
+                          {strand?.code || "UNASSIGNED"}
+                        </span>
+
+                        <h3 className="font-semibold text-gray-900">
+                          {strand?.name ||
+                            "Sections without a strand"}
+                        </h3>
+                      </div>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        {strandSections.length} section
+                        {strandSections.length === 1
+                          ? ""
+                          : "s"}
+                      </p>
+                    </div>
                   </div>
-                </td>
-              </tr>
-            ))}
-            {(loading || records[activeTab].length === 0) && (
-              <tr>
-                <td colSpan={activeConfig.columns.length + 1} className="p-10 text-center text-gray-400">
-                  {loading ? "Loading records..." : "No records yet."}
-                </td>
-              </tr>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead>
+                        <tr className="bg-white text-left text-gray-500">
+                          <th className="px-5 py-3 font-medium">
+                            Section
+                          </th>
+
+                          <th className="px-5 py-3 font-medium">
+                            Grade Level
+                          </th>
+
+                          <th className="px-5 py-3 font-medium">
+                            School Year
+                          </th>
+
+                          <th className="px-5 py-3 font-medium">
+                            Status
+                          </th>
+
+                          <th className="px-5 py-3 text-right font-medium">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {strandSections.map((section) => (
+                          <tr
+                            key={section.id}
+                            className="border-t border-gray-100"
+                          >
+                            <td className="px-5 py-3.5">
+                              <p className="font-medium text-gray-900">
+                                {section.section_name}
+                              </p>
+                            </td>
+
+                            <td className="px-5 py-3.5 text-gray-600">
+                              Grade {section.grade_level}
+                            </td>
+
+                            <td className="px-5 py-3.5 text-gray-600">
+                              {getSchoolYearName(
+                                section.school_year_id,
+                              )}
+                            </td>
+
+                            <td className="px-5 py-3.5">
+                              <StatusBadge
+                                status={section.status}
+                              />
+                            </td>
+
+                            <td className="px-5 py-3.5">
+                              <div className="flex justify-end gap-1">
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() =>
+                                    openModal(section)
+                                  }
+                                  aria-label={`Edit ${section.section_name}`}
+                                  className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() =>
+                                    handleDelete(section)
+                                  }
+                                  aria-label={`Delete ${section.section_name}`}
+                                  className="rounded-lg p-2 text-red-500 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ),
             )}
-          </tbody>
-        </table>
-      </div>
+        </div>
+      ) : activeTab === "subjects" ? (
+        <div className="space-y-6">
+          {loading && (
+            <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center text-sm text-gray-400 shadow-sm">
+              Loading subjects...
+            </div>
+          )}
+
+          {!loading && groupedSubjects.length === 0 && (
+            <div className="rounded-2xl border border-gray-100 bg-white p-10 text-center text-sm text-gray-400 shadow-sm">
+              No subjects found.
+            </div>
+          )}
+
+          {!loading &&
+            groupedSubjects.map(
+              ({
+                type,
+                subjects: typeSubjects,
+              }) => (
+                <section
+                  key={type}
+                  className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-lg bg-blue-600 px-3 py-1 text-sm font-bold text-white">
+                          {formatStatus(type)}
+                        </span>
+
+                        <h3 className="font-semibold text-gray-900">
+                          {formatStatus(type)} Subjects
+                        </h3>
+                      </div>
+
+                      <p className="mt-1 text-xs text-gray-500">
+                        {typeSubjects.length} subject
+                        {typeSubjects.length === 1
+                          ? ""
+                          : "s"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[850px] text-sm">
+                      <thead>
+                        <tr className="bg-white text-left text-gray-500">
+                          <th className="px-5 py-3 font-medium">
+                            Subject
+                          </th>
+
+                          <th className="px-5 py-3 font-medium">
+                            Grade Level
+                          </th>
+
+                          <th className="px-5 py-3 font-medium">
+                            Strand
+                          </th>
+
+                          <th className="px-5 py-3 font-medium">
+                            Status
+                          </th>
+
+                          <th className="px-5 py-3 text-right font-medium">
+                            Actions
+                          </th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {typeSubjects.map((subject) => (
+                          <tr
+                            key={subject.id}
+                            className="border-t border-gray-100"
+                          >
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <SubjectImage
+                                  path={subject.image_path}
+                                  name={subject.subject_name}
+                                  className="h-12 w-20 shrink-0 rounded-lg"
+                                />
+
+                                <div className="min-w-0">
+                                  <p className="font-medium text-gray-900">
+                                    {subject.subject_name}
+                                  </p>
+
+                                  <p className="text-xs text-gray-400">
+                                    {subject.subject_code}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td className="px-5 py-3.5 text-gray-600">
+                              Grade {subject.grade_level}
+                            </td>
+
+                            <td className="px-5 py-3.5 text-gray-600">
+                              {getStrandName(
+                                subject.strand_id,
+                              )}
+                            </td>
+
+                            <td className="px-5 py-3.5">
+                              <StatusBadge
+                                status={subject.status}
+                              />
+                            </td>
+
+                            <td className="px-5 py-3.5">
+                              <div className="flex justify-end gap-1">
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() =>
+                                    openModal(subject)
+                                  }
+                                  aria-label={`Edit ${subject.subject_name}`}
+                                  className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={saving}
+                                  onClick={() =>
+                                    handleDelete(subject)
+                                  }
+                                  aria-label={`Delete ${subject.subject_name}`}
+                                  className="rounded-lg p-2 text-red-500 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              ),
+            )}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-left text-gray-500">
+                {activeConfig.columns.map((column) => (
+                  <th
+                    key={column.label}
+                    className="px-5 py-3 font-medium"
+                  >
+                    {column.label}
+                  </th>
+                ))}
+
+                <th className="px-5 py-3 text-right font-medium">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {!loading &&
+                records[activeTab].map((record) => (
+                  <tr
+                    key={record.id}
+                    className="border-t border-gray-100"
+                  >
+                    {activeConfig.columns.map(
+                      (column) => (
+                        <td
+                          key={column.label}
+                          className="px-5 py-3.5 text-gray-600"
+                        >
+                          {column.render(record)}
+                        </td>
+                      ),
+                    )}
+
+                    <td className="px-5 py-3.5">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() =>
+                            openModal(record)
+                          }
+                          aria-label="Edit record"
+                          className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() =>
+                            handleDelete(record)
+                          }
+                          aria-label="Delete record"
+                          className="rounded-lg p-2 text-red-500 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+              {(loading ||
+                records[activeTab].length === 0) && (
+                  <tr>
+                    <td
+                      colSpan={
+                        activeConfig.columns.length + 1
+                      }
+                      className="p-10 text-center text-gray-400"
+                    >
+                      {loading
+                        ? "Loading records..."
+                        : "No records yet."}
+                    </td>
+                  </tr>
+                )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {modal && (
         <RecordModal
