@@ -8,7 +8,18 @@ import {
   teacherSidebarItems,
 } from "./teacherConfig";
 
-export default function teacherSidebar({
+const hiddenSidebarItems = new Set([
+  "Assignments",
+  "Quizzes",
+  "Gradebook",
+  "Learning Materials",
+]);
+
+const visibleSidebarItems = teacherSidebarItems.filter(
+  ({ label }) => !hiddenSidebarItems.has(label),
+);
+
+export default function TeacherSidebar({
   activeView,
   mobileOpen,
   onClose,
@@ -51,7 +62,7 @@ export default function teacherSidebar({
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {teacherSidebarItems.map(
+          {visibleSidebarItems.map(
             ({ key, icon: Icon, label }) => (
               <button
                 type="button"

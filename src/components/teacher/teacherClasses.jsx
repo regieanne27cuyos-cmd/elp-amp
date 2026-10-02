@@ -5,18 +5,6 @@ import {
 } from "lucide-react";
 import SubjectImage from "../subjectImage";
 
-function formatSemester(value) {
-  if (value === "first" || Number(value) === 1) {
-    return "First Semester";
-  }
-
-  if (value === "second" || Number(value) === 2) {
-    return "Second Semester";
-  }
-
-  return value || "Semester unavailable";
-}
-
 export function TeacherClassStats({
   classes,
   loading,
@@ -31,14 +19,18 @@ export function TeacherClassStats({
     {
       label: "Assigned Subjects",
       value: new Set(
-        classes.map((classRecord) => classRecord.subject_id),
+        classes.map(
+          (classRecord) => classRecord.subject_id,
+        ),
       ).size,
       icon: Layers,
     },
     {
       label: "Assigned Sections",
       value: new Set(
-        classes.map((classRecord) => classRecord.section_id),
+        classes.map(
+          (classRecord) => classRecord.section_id,
+        ),
       ).size,
       icon: GraduationCap,
     },
@@ -68,7 +60,10 @@ export function TeacherClassStats({
   );
 }
 
-function ClassCard({ classRecord, onOpenClass }) {
+function ClassCard({
+  classRecord,
+  onOpenClass,
+}) {
   const subjectName =
     classRecord.subject?.subject_name ||
     "Subject unavailable";
@@ -98,7 +93,8 @@ function ClassCard({ classRecord, onOpenClass }) {
 
             <dd className="text-gray-700">
               Grade{" "}
-              {classRecord.section?.grade_level || "—"}
+              {classRecord.section?.grade_level ||
+                "—"}
               {" · "}
               {classRecord.section?.section_name ||
                 "Section unavailable"}
@@ -113,18 +109,6 @@ function ClassCard({ classRecord, onOpenClass }) {
             <dd className="text-gray-700">
               {classRecord.school_year?.name ||
                 "School year unavailable"}
-            </dd>
-          </div>
-
-          <div>
-            <dt className="text-xs text-gray-400">
-              Semester
-            </dt>
-
-            <dd className="text-gray-700">
-              {formatSemester(
-                classRecord.semester?.name,
-              )}
             </dd>
           </div>
         </dl>
@@ -195,8 +179,9 @@ export default function TeacherClasses({
   if (classes.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-gray-200 bg-white p-6 text-sm text-gray-500">
-        No active teaching assignments yet. Your school
-        administrator can assign subjects and sections to you.
+        No active teaching assignments yet. Your
+        school administrator can assign subjects and
+        sections to you.
       </div>
     );
   }
