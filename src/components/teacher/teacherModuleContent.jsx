@@ -1,6 +1,7 @@
 import { BookOpen } from "lucide-react";
 import AnnouncementList from "./announcementList";
 import TeacherMyClasses from "./teacherMyClasses";
+import TeacherCalendar from "./teacherCalendar";
 import {
   teacherBottomSidebarItems,
   teacherModuleDescriptions,
@@ -46,6 +47,10 @@ export default function TeacherModuleContent({
 }) {
   if (activeView === "classes") {
     return <TeacherMyClasses />;
+  }
+
+  if (activeView === "calendar") {
+    return <TeacherCalendar />;
   }
 
   if (activeView === "announcements") {

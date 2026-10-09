@@ -23,21 +23,6 @@ export const teacherSidebarItems = [
     label: "My Classes",
   },
   {
-    key: "assignments",
-    icon: ClipboardList,
-    label: "Assignments",
-  },
-  {
-    key: "quizzes",
-    icon: CheckSquare,
-    label: "Quizzes",
-  },
-  {
-    key: "gradebook",
-    icon: BarChart2,
-    label: "Gradebook",
-  },
-  {
     key: "materials",
     icon: FileText,
     label: "Learning Materials",

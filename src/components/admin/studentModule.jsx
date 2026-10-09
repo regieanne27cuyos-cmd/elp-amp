@@ -400,16 +400,21 @@ function BulkStudentForm({
       return;
     }
 
-    const students = rows.map((row) => ({
+    const students = rows.map((row, index) => ({
+      student_number: getNextStudentNumber(
+        existingStudents,
+        index,
+      ),
       full_name: buildFullName(row),
-
+      first_name: row.first_name.trim(),
+      middle_name: row.middle_name.trim() || null,
+      last_name: row.last_name.trim(),
       email: buildStudentEmail(
         row.last_name,
-
         row.email_code,
       ),
-
-      contact_number: row.contact_number.trim() || null,
+      contact_number:
+        row.contact_number.trim() || null,
     }));
 
     const emails = students.map((student) => student.email.toLowerCase());

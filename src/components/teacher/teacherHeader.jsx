@@ -4,7 +4,6 @@ import {
   LogOut,
   Menu,
   Search,
-  Settings,
   User,
 } from "lucide-react";
 
@@ -132,17 +131,6 @@ export default function teacherHeader({
             >
               <User className="h-4 w-4" />
               Profile
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                onSelectView("settings")
-              }
-              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-            >
-              <Settings className="h-4 w-4" />
-              Settings
             </button>
 
             <div className="my-1 border-t border-gray-100" />

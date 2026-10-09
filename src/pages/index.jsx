@@ -14,7 +14,7 @@ import loginBg from "../assets/school-login-bg.jpg";
 import logo from "../assets/ejist-primary-logo.png";
 
 const roleRoutes = {
-  student: "/dashboard",
+  student: "/student/dashboard",
   teacher: "/teacher/dashboard",
 };
 
