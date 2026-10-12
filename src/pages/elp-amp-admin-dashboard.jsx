@@ -10,6 +10,7 @@ import {
   ChevronDown,
   LayoutDashboard,
   Users,
+  UsersRound,
   GraduationCap,
   Megaphone,
   UserCog,
@@ -27,6 +28,7 @@ import TeacherModule from "../components/admin/teacherModule";
 import StudentModule from "../components/admin/studentModule";
 import AnnouncementModule from "../components/admin/announcementModule";
 import TeachingAssignmentModule from "../components/admin/teachingAssignmentModule";
+import SectionRosterModule from "../components/admin/sectionRosterModule";
 
 import {
   Field,
@@ -44,6 +46,11 @@ const sidebarItems = [
     key: "academic",
     icon: BookOpen,
     label: "Academic Setup",
+  },
+  {
+    key: "section_rosters",
+    label: "Section Rosters",
+    icon: UsersRound,
   },
   {
     key: "teaching_assignments", icon: BookUser, label: "Teaching Assignments",
@@ -1230,6 +1237,10 @@ export default function AdminDashboard() {
           )}
 
           {activeView === "academic" && <AcademicSetup />}
+
+          {activeView === "section_rosters" && (
+            <SectionRosterModule />
+          )}
 
           {activeView === "admins" && (
             <AdminModule

@@ -76,7 +76,7 @@ export default function TeacherDashboard() {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50 text-gray-900">
+    <div className="flex h-screen overflow-hidden bg-gray-50 text-gray-900">
       <TeacherSidebar
         activeView={activeView}
         mobileOpen={mobileSidebarOpen}
@@ -87,7 +87,7 @@ export default function TeacherDashboard() {
         onLogout={logout}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <TeacherHeader
           teacherProfile={teacherProfile}
           announcementCount={
@@ -100,7 +100,7 @@ export default function TeacherDashboard() {
           onLogout={logout}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
           {activeView === "dashboard" ? (
             <TeacherDashboardHome
               teacherProfile={teacherProfile}
@@ -116,6 +116,7 @@ export default function TeacherDashboard() {
           ) : (
             <TeacherModuleContent
               activeView={activeView}
+              teacherProfile={teacherProfile}
               announcements={announcements}
               announcementsLoading={
                 announcementsLoading

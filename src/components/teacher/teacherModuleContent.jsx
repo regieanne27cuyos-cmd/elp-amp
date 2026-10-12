@@ -2,6 +2,9 @@ import { BookOpen } from "lucide-react";
 import AnnouncementList from "./announcementList";
 import TeacherMyClasses from "./teacherMyClasses";
 import TeacherCalendar from "./teacherCalendar";
+import TeacherProfile from "./teacherProfile";
+import TeacherSettings from "./teacherSettings";
+import TeacherLearningMaterials from "./teacherLearningMaterials";
 import {
   teacherBottomSidebarItems,
   teacherModuleDescriptions,
@@ -41,6 +44,7 @@ function EmptyModule({
 
 export default function TeacherModuleContent({
   activeView,
+  teacherProfile,
   announcements,
   announcementsLoading,
   announcementsError,
@@ -51,6 +55,26 @@ export default function TeacherModuleContent({
 
   if (activeView === "calendar") {
     return <TeacherCalendar />;
+  }
+
+  if (activeView === "profile") {
+    return (
+      <TeacherProfile
+        teacherProfile={teacherProfile}
+      />
+    );
+  }
+
+  if (activeView === "settings") {
+    return (
+      <TeacherSettings
+        teacherProfile={teacherProfile}
+      />
+    );
+  }
+
+  if (activeView === "materials") {
+    return <TeacherLearningMaterials />;
   }
 
   if (activeView === "announcements") {
