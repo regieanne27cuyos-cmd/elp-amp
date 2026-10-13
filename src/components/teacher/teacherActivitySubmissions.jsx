@@ -233,15 +233,35 @@ export default function TeacherActivitySubmissions({
     setDownloadingId(null);
   }
 
-  async function gradeSubmission(submission) {
-    const value = scores[submission.student_id];
+  async function gradeSubmission(
+    submission,
+  ) {
+    const value =
+      scores[submission.student_id];
+
+    const numericScore = Number(value);
+    const maximumScore = Number(
+      activity.points || 0,
+    );
+
     if (
       value === "" ||
       value === undefined ||
-      Number(value) < 0 ||
-      Number(value) > Number(activity.points)
+      Number.isNaN(numericScore)
     ) {
-      setError(`Enter a score from 0 to ${activity.points}.`);
+      setError(
+        "Enter a valid numeric score.",
+      );
+      return;
+    }
+
+    if (
+      numericScore < 0 ||
+      numericScore > maximumScore
+    ) {
+      setError(
+        `Enter a score from 0 to ${maximumScore}.`,
+      );
       return;
     }
 
@@ -249,21 +269,55 @@ export default function TeacherActivitySubmissions({
     setError("");
     setSuccess("");
 
-    const { error: gradeError } = await supabase.rpc(
-      "grade_activity_submission",
-      {
-        p_submission_id: submission.id,
-        p_score: Number(value),
-        p_feedback: feedback[submission.student_id] || null,
-      },
-    );
+    try {
+      const {
+        data,
+        error: gradeError,
+      } = await supabase.rpc(
+        "grade_activity_submission",
+        {
+          p_submission_id:
+            submission.id,
+          p_score: numericScore,
+          p_feedback:
+            feedback[
+              submission.student_id
+            ]?.trim() || null,
+        },
+      );
 
-    if (gradeError) setError(gradeError.message);
-    else {
-      setSuccess(`${studentById.get(submission.student_id)?.full_name || "Student"} graded successfully.`);
+      if (gradeError) {
+        console.error(
+          "Submission grading failed:",
+          gradeError,
+        );
+
+        throw gradeError;
+      }
+
+      console.log(
+        "Submission grading result:",
+        data,
+      );
+
+      const studentName =
+        studentById.get(
+          submission.student_id,
+        )?.full_name || "Student";
+
+      setSuccess(
+        `${studentName} graded successfully.`,
+      );
+
       await loadData();
+    } catch (gradeError) {
+      setError(
+        gradeError.message ||
+        "Unable to save the student's grade.",
+      );
+    } finally {
+      setSavingId(null);
     }
-    setSavingId(null);
   }
 
   async function gradeQuizAttempt(attempt) {

@@ -73,7 +73,7 @@ function ClassCard({
       <SubjectImage
         path={classRecord.subject?.image_path}
         name={subjectName}
-        className="h-36 w-full"
+        className="h-80 w-full"
       />
 
       <div className="p-4">

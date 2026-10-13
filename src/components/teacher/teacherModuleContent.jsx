@@ -4,7 +4,6 @@ import TeacherMyClasses from "./teacherMyClasses";
 import TeacherCalendar from "./teacherCalendar";
 import TeacherProfile from "./teacherProfile";
 import TeacherSettings from "./teacherSettings";
-import TeacherLearningMaterials from "./teacherLearningMaterials";
 import {
   teacherBottomSidebarItems,
   teacherModuleDescriptions,
@@ -44,13 +43,17 @@ function EmptyModule({
 
 export default function TeacherModuleContent({
   activeView,
-  teacherProfile,
   announcements,
   announcementsLoading,
   announcementsError,
+  onOpenClass,
 }) {
   if (activeView === "classes") {
-    return <TeacherMyClasses />;
+    return (
+      <TeacherMyClasses
+        onOpenClass={onOpenClass}
+      />
+    );
   }
 
   if (activeView === "calendar") {
@@ -58,23 +61,11 @@ export default function TeacherModuleContent({
   }
 
   if (activeView === "profile") {
-    return (
-      <TeacherProfile
-        teacherProfile={teacherProfile}
-      />
-    );
+    return <TeacherProfile />;
   }
 
   if (activeView === "settings") {
-    return (
-      <TeacherSettings
-        teacherProfile={teacherProfile}
-      />
-    );
-  }
-
-  if (activeView === "materials") {
-    return <TeacherLearningMaterials />;
+    return <TeacherSettings />;
   }
 
   if (activeView === "announcements") {
