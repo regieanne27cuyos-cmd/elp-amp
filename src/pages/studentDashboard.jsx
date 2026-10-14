@@ -19,6 +19,8 @@ import StudentActivityWork from "../components/student/studentActivityWork";
 import StudentHeader from "../components/student/studentHeader";
 import StudentProfile from "../components/student/studentProfile";
 import StudentClassesModule from "../components/student/studentClassesModule";
+import StudentClassWorkspace from "../components/student/studentClassWorkspace";
+import StudentAnnouncements from "../components/student/studentAnnouncements";
 
 const navigationItems = [
   {
@@ -60,6 +62,11 @@ function StudentSidebar({
   onSelectView,
   onLogout,
 }) {
+  function handleSelectView(view) {
+    onSelectView(view);
+    onClose?.();
+  }
+
   return (
     <>
       {mobileOpen && (
@@ -72,16 +79,15 @@ function StudentSidebar({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-gray-100 bg-white transition-transform lg:static lg:translate-x-0 ${
-          mobileOpen
-            ? "translate-x-0"
-            : "-translate-x-full"
-        }`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r border-gray-100 bg-white transition-transform lg:static lg:translate-x-0 ${mobileOpen
+          ? "translate-x-0"
+          : "-translate-x-full"
+          }`}
       >
-        <div className="flex h-16 items-center gap-2 border-b border-gray-100 px-5">
-          <GraduationCap className="h-6 w-6 text-blue-600" />
+        <div className="flex h-16 shrink-0 items-center gap-2 border-b border-gray-100 px-5">
+          <GraduationCap className="h-6 w-6 shrink-0 text-blue-600" />
 
-          <span className="text-lg font-bold">
+          <span className="truncate text-lg font-bold">
             ELP-AMP Student
           </span>
 
@@ -95,7 +101,7 @@ function StudentSidebar({
           </button>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {navigationItems.map(
             ({ key, label, icon: Icon }) => {
               const active = activeView === key;
@@ -104,31 +110,35 @@ function StudentSidebar({
                 <button
                   key={key}
                   type="button"
-                  onClick={() => {
-                    onSelectView(key);
-                    onClose();
-                  }}
-                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-blue-50 text-blue-600"
-                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                  }`}
+                  onClick={() =>
+                    handleSelectView(key)
+                  }
+                  aria-current={
+                    active ? "page" : undefined
+                  }
+                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${active
+                    ? "bg-blue-50 text-blue-600"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+                    }`}
                 >
-                  <Icon className="h-[18px] w-[18px]" />
-                  {label}
+                  <Icon className="h-[18px] w-[18px] shrink-0" />
+
+                  <span className="truncate">
+                    {label}
+                  </span>
                 </button>
               );
             },
           )}
         </nav>
 
-        <div className="border-t border-gray-100 p-3">
+        <div className="shrink-0 border-t border-gray-100 p-3">
           <button
             type="button"
             onClick={onLogout}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50"
           >
-            <LogOut className="h-[18px] w-[18px]" />
+            <LogOut className="h-[18px] w-[18px] shrink-0" />
             Log out
           </button>
         </div>
@@ -166,21 +176,26 @@ export default function StudentDashboard() {
 
   const {
     student,
-    classes,
-    activities,
+    classes = [],
+    activities = [],
     loading,
     error,
     reload,
   } = useStudentDashboard();
-
-  const [selectedActivity, setSelectedActivity] =
-    useState(null);
 
   const [activeView, setActiveView] =
     useState("dashboard");
 
   const [mobileOpen, setMobileOpen] =
     useState(false);
+
+  const [selectedClass, setSelectedClass] =
+    useState(null);
+
+  const [
+    selectedActivity,
+    setSelectedActivity,
+  ] = useState(null);
 
   async function handleLogout() {
     try {
@@ -202,19 +217,52 @@ export default function StudentDashboard() {
 
       window.alert(
         logoutError.message ||
-          "Unable to log out. Please try again.",
+        "Unable to log out. Please try again.",
       );
     }
   }
 
   function selectView(view) {
     setActiveView(view);
+    setSelectedClass(null);
     setSelectedActivity(null);
     setMobileOpen(false);
   }
 
-  function handleOpenClass() {
-    selectView("classes");
+  function openClass(classRecord) {
+    if (!classRecord) return;
+
+    setSelectedClass(classRecord);
+    setSelectedActivity(null);
+    setActiveView("classes");
+    setMobileOpen(false);
+  }
+
+  function closeClass() {
+    setSelectedClass(null);
+    setSelectedActivity(null);
+    setActiveView("classes");
+  }
+
+  function openActivity(activity) {
+    if (!activity) return;
+
+    setSelectedActivity(activity);
+    setSelectedClass(null);
+    setMobileOpen(false);
+  }
+
+  function closeActivity() {
+    setSelectedActivity(null);
+  }
+
+  function handleRetry() {
+    if (reload) {
+      reload();
+      return;
+    }
+
+    window.location.reload();
   }
 
   function renderContent() {
@@ -222,10 +270,17 @@ export default function StudentDashboard() {
       return (
         <StudentActivityWork
           activity={selectedActivity}
-          onBack={() => {
-            setSelectedActivity(null);
-            setActiveView("assignments");
-          }}
+          onBack={closeActivity}
+        />
+      );
+    }
+
+    if (selectedClass) {
+      return (
+        <StudentClassWorkspace
+          classRecord={selectedClass}
+          onBack={closeClass}
+          onOpenActivity={openActivity}
         />
       );
     }
@@ -238,15 +293,24 @@ export default function StudentDashboard() {
           activities={activities}
           loading={loading}
           error={error}
-          onRetry={reload}
-          onOpenClass={handleOpenClass}
+          onRetry={handleRetry}
           onSelectView={selectView}
+          onOpenClass={openClass}
+          onOpenActivity={openActivity}
         />
       );
     }
 
     if (activeView === "classes") {
-      return <StudentClassesModule />;
+      return (
+        <StudentClassesModule
+          classes={classes}
+          loading={loading}
+          error={error}
+          onRetry={handleRetry}
+          onOpenClass={openClass}
+        />
+      );
     }
 
     if (activeView === "assignments") {
@@ -255,10 +319,8 @@ export default function StudentDashboard() {
           activities={activities}
           loading={loading}
           error={error}
-          onRetry={reload}
-          onOpenActivity={(activity) => {
-            setSelectedActivity(activity);
-          }}
+          onRetry={handleRetry}
+          onOpenActivity={openActivity}
         />
       );
     }
@@ -274,13 +336,7 @@ export default function StudentDashboard() {
     }
 
     if (activeView === "announcements") {
-      return (
-        <PlaceholderView
-          title="Announcements"
-          description="Active announcements from the school administration will appear here."
-          icon={Megaphone}
-        />
-      );
+      return <StudentAnnouncements />;
     }
 
     if (activeView === "profile") {
@@ -308,9 +364,7 @@ export default function StudentDashboard() {
       <StudentSidebar
         activeView={activeView}
         mobileOpen={mobileOpen}
-        onClose={() => {
-          setMobileOpen(false);
-        }}
+        onClose={() => setMobileOpen(false)}
         onSelectView={selectView}
         onLogout={handleLogout}
       />
@@ -319,9 +373,9 @@ export default function StudentDashboard() {
         <StudentHeader
           studentProfile={student}
           announcementCount={0}
-          onOpenSidebar={() => {
-            setMobileOpen(true);
-          }}
+          onOpenSidebar={() =>
+            setMobileOpen(true)
+          }
           onSelectView={selectView}
           onLogout={handleLogout}
         />

@@ -9,8 +9,6 @@ import {
   BookOpen,
   CalendarClock,
   CheckCircle2,
-  Download,
-  ExternalLink,
   FileText,
   GraduationCap,
   Loader2,
@@ -18,6 +16,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import SubjectImage from "../subjectImage";
+import FilePreviewLink from "../filePreviewLink";
 import StudentActivityWork from "./studentActivityWork";
 
 const MODULE_BUCKET = "learning-materials";
@@ -58,15 +57,16 @@ function formatDate(value) {
     return "No due date";
   }
 
-  return new Date(
-    value,
-  ).toLocaleString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return new Date(value).toLocaleString(
+    "en-PH",
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    },
+  );
 }
 
 function activityTypeLabel(value) {
@@ -92,13 +92,11 @@ function ActivityStatus({
       : submission;
 
   let label = "Not submitted";
-  let style =
-    "bg-gray-100 text-gray-600";
+  let style = "bg-gray-100 text-gray-600";
 
   if (record?.status === "graded") {
     label = "Graded";
-    style =
-      "bg-green-100 text-green-700";
+    style = "bg-green-100 text-green-700";
   } else if (
     record?.status === "late" ||
     record?.is_late
@@ -112,12 +110,10 @@ function ActivityStatus({
         ? "In progress"
         : "Submitted";
 
-    style =
-      "bg-blue-100 text-blue-700";
+    style = "bg-blue-100 text-blue-700";
   } else if (
     activity.due_at &&
-    new Date(activity.due_at) <
-      new Date()
+    new Date(activity.due_at) < new Date()
   ) {
     label = "Missing";
     style = "bg-red-100 text-red-700";
@@ -167,11 +163,6 @@ export default function StudentClassWorkspace({
 
   const [error, setError] =
     useState("");
-
-  const [
-    downloadingId,
-    setDownloadingId,
-  ] = useState(null);
 
   async function loadWorkspace() {
     if (!classRecord?.id) return;
@@ -233,12 +224,12 @@ export default function StudentClassWorkspace({
 
       const activityIds =
         loadedActivities.map(
-          (item) => item.id,
+          (activity) => activity.id,
         );
 
       const moduleIds =
         loadedModules.map(
-          (item) => item.id,
+          (module) => module.id,
         );
 
       let loadedSubmissions = [];
@@ -253,9 +244,7 @@ export default function StudentClassWorkspace({
           scoreResult,
         ] = await Promise.all([
           supabase
-            .from(
-              "activity_submissions",
-            )
+            .from("activity_submissions")
             .select(`
               id,
               activity_id,
@@ -356,9 +345,7 @@ export default function StudentClassWorkspace({
 
       setActivities(loadedActivities);
       setModules(loadedModules);
-      setSubmissions(
-        loadedSubmissions,
-      );
+      setSubmissions(loadedSubmissions);
       setAttempts(loadedAttempts);
       setScores(loadedScores);
       setResources(loadedResources);
@@ -387,9 +374,9 @@ export default function StudentClassWorkspace({
     useMemo(
       () =>
         new Map(
-          submissions.map((item) => [
-            item.activity_id,
-            item,
+          submissions.map((submission) => [
+            submission.activity_id,
+            submission,
           ]),
         ),
       [submissions],
@@ -398,9 +385,9 @@ export default function StudentClassWorkspace({
   const attemptByActivity = useMemo(
     () =>
       new Map(
-        attempts.map((item) => [
-          item.activity_id,
-          item,
+        attempts.map((attempt) => [
+          attempt.activity_id,
+          attempt,
         ]),
       ),
     [attempts],
@@ -409,9 +396,9 @@ export default function StudentClassWorkspace({
   const scoreByActivity = useMemo(
     () =>
       new Map(
-        scores.map((item) => [
-          item.activity_id,
-          item,
+        scores.map((score) => [
+          score.activity_id,
+          score,
         ]),
       ),
     [scores],
@@ -423,9 +410,7 @@ export default function StudentClassWorkspace({
 
       resources.forEach((resource) => {
         if (
-          !grouped.has(
-            resource.module_id,
-          )
+          !grouped.has(resource.module_id)
         ) {
           grouped.set(
             resource.module_id,
@@ -446,8 +431,7 @@ export default function StudentClassWorkspace({
   const gradedActivities =
     activities.filter((activity) => {
       if (
-        activity.activity_type ===
-        "quiz"
+        activity.activity_type === "quiz"
       ) {
         return (
           attemptByActivity.get(
@@ -461,64 +445,11 @@ export default function StudentClassWorkspace({
       );
     });
 
-  async function downloadResource(
-    resource,
-  ) {
-    if (!resource.file_path) return;
-
-    setDownloadingId(resource.id);
-    setError("");
-
-    try {
-      const {
-        data,
-        error: downloadError,
-      } = await supabase.storage
-        .from(MODULE_BUCKET)
-        .createSignedUrl(
-          resource.file_path,
-          60,
-          {
-            download:
-              resource.file_name ||
-              "learning-material",
-          },
-        );
-
-      if (downloadError) {
-        throw downloadError;
-      }
-
-      const link =
-        document.createElement("a");
-
-      link.href = data.signedUrl;
-      link.download =
-        resource.file_name ||
-        "learning-material";
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (downloadError) {
-      console.error(
-        "Material download failed:",
-        downloadError,
-      );
-
-      setError(
-        downloadError.message ||
-          "Unable to download this material.",
-      );
-    } finally {
-      setDownloadingId(null);
-    }
-  }
-
   if (selectedActivity) {
     return (
       <StudentActivityWork
         activity={selectedActivity}
+        classRecord={classRecord}
         onBack={() => {
           setSelectedActivity(null);
           loadWorkspace();
@@ -632,6 +563,7 @@ export default function StudentClassWorkspace({
       <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
         <div
           role="tablist"
+          aria-label="Class workspace"
           className="flex overflow-x-auto border-b border-gray-100"
         >
           {tabs.map(
@@ -642,11 +574,13 @@ export default function StudentClassWorkspace({
             }) => (
               <button
                 key={key}
+                id={`${key}-tab`}
                 type="button"
                 role="tab"
                 aria-selected={
                   activeTab === key
                 }
+                aria-controls={`${key}-panel`}
                 onClick={() =>
                   setActiveTab(key)
                 }
@@ -664,8 +598,19 @@ export default function StudentClassWorkspace({
         </div>
 
         {error && (
-          <div className="m-5 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div
+            role="alert"
+            className="m-5 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
             {error}
+
+            <button
+              type="button"
+              onClick={loadWorkspace}
+              className="ml-2 font-medium underline"
+            >
+              Try again
+            </button>
           </div>
         )}
 
@@ -679,7 +624,12 @@ export default function StudentClassWorkspace({
         {!loading &&
           !error &&
           activeTab === "overview" && (
-            <div className="p-5">
+            <div
+              id="overview-panel"
+              role="tabpanel"
+              aria-labelledby="overview-tab"
+              className="p-5"
+            >
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="rounded-xl bg-blue-50 p-4">
                   <p className="text-sm text-blue-700">
@@ -717,7 +667,12 @@ export default function StudentClassWorkspace({
         {!loading &&
           !error &&
           activeTab === "activities" && (
-            <div className="space-y-3 p-5">
+            <div
+              id="activities-panel"
+              role="tabpanel"
+              aria-labelledby="activities-tab"
+              className="space-y-3 p-5"
+            >
               {activities.map(
                 (activity) => (
                   <button
@@ -783,7 +738,12 @@ export default function StudentClassWorkspace({
         {!loading &&
           !error &&
           activeTab === "modules" && (
-            <div className="space-y-4 p-5">
+            <div
+              id="modules-panel"
+              role="tabpanel"
+              aria-labelledby="modules-tab"
+              className="space-y-4 p-5"
+            >
               {modules.map((module) => {
                 const moduleResources =
                   resourcesByModule.get(
@@ -809,50 +769,45 @@ export default function StudentClassWorkspace({
                       {moduleResources.map(
                         (resource) => (
                           <div
-                            key={resource.id}
-                            className="flex items-center gap-3 rounded-lg bg-gray-50 p-3"
+                            key={
+                              resource.id
+                            }
+                            className="flex flex-col gap-3 rounded-lg bg-gray-50 p-3 sm:flex-row sm:items-center"
                           >
                             <FileText className="h-5 w-5 shrink-0 text-blue-600" />
 
-                            <p className="min-w-0 flex-1 truncate text-sm font-medium text-gray-700">
-                              {resource.file_name ||
-                                resource.external_url ||
-                                "Resource"}
-                            </p>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-gray-700">
+                                {resource.file_name ||
+                                  resource.external_url ||
+                                  "Learning resource"}
+                              </p>
 
-                            {resource.external_url ? (
-                              <a
-                                href={
-                                  resource.external_url
-                                }
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="rounded p-2 text-blue-600 hover:bg-blue-100"
-                              >
-                                <ExternalLink className="h-4 w-4" />
-                              </a>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  downloadResource(
-                                    resource,
-                                  )
-                                }
-                                disabled={
-                                  downloadingId ===
-                                  resource.id
-                                }
-                                className="rounded p-2 text-blue-600 hover:bg-blue-100 disabled:opacity-50"
-                              >
-                                {downloadingId ===
-                                resource.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Download className="h-4 w-4" />
-                                )}
-                              </button>
-                            )}
+                              {resource.file_type && (
+                                <p className="mt-0.5 text-xs text-gray-400">
+                                  {
+                                    resource.file_type
+                                  }
+                                </p>
+                              )}
+                            </div>
+
+                            <FilePreviewLink
+                              bucket={
+                                MODULE_BUCKET
+                              }
+                              path={
+                                resource.file_path
+                              }
+                              url={
+                                resource.external_url
+                              }
+                              fileName={
+                                resource.file_name ||
+                                "Open resource"
+                              }
+                              className="shrink-0"
+                            />
                           </div>
                         ),
                       )}
@@ -879,7 +834,12 @@ export default function StudentClassWorkspace({
         {!loading &&
           !error &&
           activeTab === "grades" && (
-            <div className="overflow-x-auto p-5">
+            <div
+              id="grades-panel"
+              role="tabpanel"
+              aria-labelledby="grades-tab"
+              className="overflow-x-auto p-5"
+            >
               <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="bg-gray-50 text-left text-gray-500">

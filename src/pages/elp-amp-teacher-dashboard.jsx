@@ -18,6 +18,13 @@ export default function TeacherDashboard() {
   const [selectedClass, setSelectedClass] =
     useState(null);
 
+  // Controls which tab opens when a class
+  // workspace is selected.
+  const [
+    selectedClassTab,
+    setSelectedClassTab,
+  ] = useState("overview");
+
   const [
     selectedActivityWorkspace,
     setSelectedActivityWorkspace,
@@ -41,12 +48,17 @@ export default function TeacherDashboard() {
   function selectView(view) {
     setActiveView(view);
     setSelectedClass(null);
+    setSelectedClassTab("overview");
     setSelectedActivityWorkspace(null);
     setMobileSidebarOpen(false);
   }
 
-  function openClass(classRecord) {
+  function openClass(
+    classRecord,
+    initialTab = "overview",
+  ) {
     setSelectedClass(classRecord);
+    setSelectedClassTab(initialTab);
     setSelectedActivityWorkspace(null);
     setActiveView("classes");
     setMobileSidebarOpen(false);
@@ -54,6 +66,7 @@ export default function TeacherDashboard() {
 
   function closeClassWorkspace() {
     setSelectedClass(null);
+    setSelectedClassTab("overview");
     setSelectedActivityWorkspace(null);
     setActiveView("classes");
   }
@@ -68,11 +81,11 @@ export default function TeacherDashboard() {
     });
 
     setSelectedClass(null);
+    setSelectedClassTab("overview");
 
     /*
-     * Keep the Dashboard sidebar item active.
-     * The activity workspace is a detail page,
-     * not a separate sidebar module.
+     * Keep Dashboard active because the
+     * activity workspace is a detail page.
      */
     setActiveView("dashboard");
     setMobileSidebarOpen(false);
@@ -81,15 +94,11 @@ export default function TeacherDashboard() {
   function closeActivityWorkspace() {
     setSelectedActivityWorkspace(null);
     setSelectedClass(null);
+    setSelectedClassTab("overview");
     setActiveView("dashboard");
   }
 
   function renderContent() {
-    /*
-     * Activity workspace appears inside the
-     * dashboard layout. The sidebar and header
-     * remain visible.
-     */
     if (selectedActivityWorkspace) {
       return (
         <TeacherActivityWorkspace
@@ -110,6 +119,7 @@ export default function TeacherDashboard() {
       return (
         <TeacherClassWorkspace
           classRecord={selectedClass}
+          initialTab={selectedClassTab}
           onBack={closeClassWorkspace}
         />
       );
@@ -136,6 +146,7 @@ export default function TeacherDashboard() {
     return (
       <TeacherModuleContent
         activeView={activeView}
+        teacherProfile={teacherProfile}
         announcements={announcements}
         announcementsLoading={
           announcementsLoading
@@ -153,7 +164,6 @@ export default function TeacherDashboard() {
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <LoaderCircle className="h-5 w-5 animate-spin" />
-
           Loading teacher dashboard...
         </div>
       </div>

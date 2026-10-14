@@ -14,7 +14,6 @@ import {
   GraduationCap,
   Megaphone,
   UserCog,
-  Settings,
   LogOut,
   Plus,
   Pencil,
@@ -35,10 +34,8 @@ import {
   inputClass,
   Modal,
   RowActions,
-  SectionHeader,
   StatusBadge,
 } from "../components/admin/adminUI";
-
 
 const sidebarItems = [
   { key: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -627,6 +624,8 @@ export default function AdminDashboard() {
   const [adminProfile, setAdminProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState("");
+  const canDelete =
+    adminProfile?.role === "super_admin";
 
   //teacher
   const [teachers, setTeachers] = useState([]);
@@ -748,6 +747,9 @@ export default function AdminDashboard() {
           .select(`
           id,
           student_number,
+          first_name,
+          middle_name,
+          last_name,
           section_id,
           contact_number,
           created_at,
@@ -818,21 +820,26 @@ export default function AdminDashboard() {
               : null;
 
             return {
-              id: student.id,
-              student_number:
-                student.student_number,
-              section_id: student.section_id,
-              contact_number:
-                student.contact_number,
-              created_at: student.created_at,
-              updated_at: student.updated_at,
+              ...student,
+
+              first_name:
+                student.first_name,
+
+              middle_name:
+                student.middle_name,
+
+              last_name:
+                student.last_name,
 
               full_name:
-                profile?.full_name ||
-                "Unnamed Student",
+                profile?.full_name || "",
 
-              email: profile?.email || "",
-              role: profile?.role || "student",
+              email:
+                profile?.email || "",
+
+              role:
+                profile?.role || "student",
+
               status:
                 profile?.status || "inactive",
 
@@ -1107,33 +1114,10 @@ export default function AdminDashboard() {
             </button>
           ))}
         </nav>
-
-        <div className="px-3 py-2 border-t border-white/15">
-          <button
-            type="button"
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-blue-100 hover:bg-white/10 hover:text-white"
-          >
-            <Settings className="w-[18px] h-[18px]" />
-            Settings
-          </button>
-        </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="h-16 bg-white border-b border-gray-100 flex items-center gap-4 px-6 shrink-0">
-          <button type="button" className="text-gray-500">
-            <Menu className="w-5 h-5" />
-          </button>
-
-          <div className="flex-1 max-w-xl relative">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-
-            <input
-              type="text"
-              placeholder="Search teachers, students, announcements..."
-              className="w-full bg-gray-50 rounded-lg pl-9 pr-4 py-2 text-sm outline-none border border-transparent focus:border-gray-200"
-            />
-          </div>
 
           <div className="flex items-center gap-5 ml-auto">
             <button
@@ -1170,13 +1154,6 @@ export default function AdminDashboard() {
               </button>
 
               <div className="absolute right-0 top-full w-48 bg-white rounded-xl border border-gray-100 shadow-lg py-1.5 z-50 opacity-0 invisible translate-y-1 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-150">
-                <button
-                  type="button"
-                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-                >
-                  <Settings className="w-4 h-4" />
-                  Settings
-                </button>
 
                 <div className="my-1 border-t border-gray-100" />
 
@@ -1211,6 +1188,7 @@ export default function AdminDashboard() {
               setTeachers={setTeachers}
               loading={teachersLoading}
               error={teachersError}
+              canDelete={canDelete}
             />
           )}
 
@@ -1224,6 +1202,7 @@ export default function AdminDashboard() {
               setStudents={setStudents}
               loading={studentsLoading}
               error={studentsError}
+              canDelete={canDelete}
             />
           )}
 
@@ -1236,7 +1215,11 @@ export default function AdminDashboard() {
             />
           )}
 
-          {activeView === "academic" && <AcademicSetup />}
+          {activeView === "academic" && (
+            <AcademicSetup
+              canDelete={canDelete}
+            />
+          )}
 
           {activeView === "section_rosters" && (
             <SectionRosterModule />

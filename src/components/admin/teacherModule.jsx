@@ -27,59 +27,226 @@ function getNextTeacherNumber(teachers) {
   return `T-${year}-${nextNumber}`;
 }
 
+function createSixDigitNumber() {
+  return String(
+    Math.floor(100000 + Math.random() * 900000),
+  );
+}
+
+function getLastName(fullName) {
+  const nameParts = String(fullName || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return nameParts[nameParts.length - 1] || "";
+}
+
+function normalizeEmailName(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function generateTeacherEmail(
+  fullName,
+  randomNumber,
+) {
+  const lastName = normalizeEmailName(
+    getLastName(fullName),
+  );
+
+  if (!lastName) return "";
+
+  return `${lastName}.${randomNumber}@ejist.edu.ph`;
+}
+
+function getExistingEmailNumber(email) {
+  const match = String(email || "").match(
+    /\.(\d{6})@ejist\.edu\.ph$/i,
+  );
+
+  return match?.[1] || createSixDigitNumber();
+}
+
+function splitTeacherName(fullName) {
+  const parts = String(fullName || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  let title = "";
+
+  if (
+    ["Mr.", "Mrs.", "Ms."].includes(parts[0])
+  ) {
+    title = parts.shift();
+  }
+
+  if (parts.length === 0) {
+    return {
+      title,
+      first_name: "",
+      middle_name: "",
+      last_name: "",
+    };
+  }
+
+  if (parts.length === 1) {
+    return {
+      title,
+      first_name: parts[0],
+      middle_name: "",
+      last_name: "",
+    };
+  }
+
+  return {
+    title,
+    first_name: parts[0],
+    middle_name: parts
+      .slice(1, -1)
+      .join(" "),
+    last_name: parts[parts.length - 1],
+  };
+}
+
+function buildTeacherFullName(form) {
+  return [
+    form.title,
+    form.first_name,
+    form.middle_name,
+    form.last_name,
+  ]
+    .map((value) =>
+      String(value || "").trim(),
+    )
+    .filter(Boolean)
+    .join(" ");
+}
+
 function TeacherForm({
   initialData,
-
   suggestedTeacherNumber,
-
   onCancel,
-
   onSave,
-
   saving,
 }) {
   const isEditing = Boolean(initialData);
 
-  const [showPassword, setShowPassword] = useState(false);
+  const existingName = splitTeacherName(
+    initialData?.full_name,
+  );
 
-  const [form, setForm] = useState({
-    teacher_number: initialData?.teacher_number || suggestedTeacherNumber,
+  const [showPassword, setShowPassword] =
+    useState(false);
 
-    full_name: initialData?.full_name || "",
+  const [emailNumber] = useState(() =>
+    getExistingEmailNumber(
+      initialData?.email,
+    ),
+  );
 
-    email: initialData?.email || "",
+  const [form, setForm] = useState(() => ({
+    teacher_number:
+      initialData?.teacher_number ||
+      suggestedTeacherNumber,
 
-    password: "",
+    title: existingName.title || "Mr.",
 
-    contact_number: initialData?.contact_number || "",
+    first_name:
+      existingName.first_name || "",
 
-    employment_type: initialData?.employment_type || "full_time",
+    middle_name:
+      existingName.middle_name || "",
 
-    status: initialData?.status || "active",
-  });
+    last_name:
+      existingName.last_name || "",
+
+    email:
+      initialData?.email ||
+      generateTeacherEmail(
+        existingName.last_name,
+        emailNumber,
+      ),
+
+    password: isEditing ? "" : "ejist123",
+
+    contact_number:
+      initialData?.contact_number || "",
+
+    employment_type:
+      initialData?.employment_type ||
+      "full_time",
+
+    status:
+      initialData?.status || "active",
+  }));
 
   function update(field, value) {
-    setForm((current) => ({
-      ...current,
+    setForm((current) => {
+      const updatedForm = {
+        ...current,
+        [field]: value,
+      };
 
-      [field]: value,
-    }));
+      if (
+        field === "last_name" &&
+        !isEditing
+      ) {
+        updatedForm.email =
+          generateTeacherEmail(
+            value,
+            emailNumber,
+          );
+      }
+
+      return updatedForm;
+    });
   }
 
   function handleSubmit(event) {
     event.preventDefault();
 
+    const firstName =
+      form.first_name.trim();
+
+    const middleName =
+      form.middle_name.trim();
+
+    const lastName =
+      form.last_name.trim();
+
+    const fullName = buildTeacherFullName({
+      ...form,
+      first_name: firstName,
+      middle_name: middleName,
+      last_name: lastName,
+    });
+
+    const normalizedEmail =
+      form.email.trim().toLowerCase();
+
     if (
       !form.teacher_number.trim() ||
-      !form.full_name.trim() ||
-      !form.email.trim()
+      !form.title ||
+      !firstName ||
+      !lastName ||
+      !normalizedEmail
     ) {
-      window.alert("Teacher number, full name, and email are required.");
+      window.alert(
+        "Teacher number, title, first name, last name, and email are required.",
+      );
 
       return;
     }
 
-    if (!isEditing && form.password.length < 8) {
+    if (
+      !isEditing &&
+      form.password.length < 8
+    ) {
       window.alert(
         "The temporary password must contain at least 8 characters.",
       );
@@ -87,23 +254,56 @@ function TeacherForm({
       return;
     }
 
-    if (isEditing && form.password && form.password.length < 8) {
-      window.alert("The new password must contain at least 8 characters.");
+    if (
+      isEditing &&
+      form.password &&
+      form.password.length < 8
+    ) {
+      window.alert(
+        "The new password must contain at least 8 characters.",
+      );
 
       return;
     }
 
-    onSave(form);
+    onSave({
+      teacher_number:
+        form.teacher_number.trim(),
+
+      // These fields are combined because your
+      // current database uses full_name.
+      full_name: fullName,
+
+      email: normalizedEmail,
+
+      password: form.password,
+
+      contact_number:
+        form.contact_number.trim() || null,
+
+      employment_type:
+        form.employment_type,
+
+      status: form.status,
+    });
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4"
+    >
       <Field label="Teacher number">
         {isEditing ? (
           <input
             className={inputClass}
             value={form.teacher_number}
-            onChange={(event) => update("teacher_number", event.target.value)}
+            onChange={(event) =>
+              update(
+                "teacher_number",
+                event.target.value,
+              )
+            }
             placeholder="T-2026-001"
             required
           />
@@ -114,58 +314,173 @@ function TeacherForm({
             </p>
 
             <p className="mt-0.5 text-xs text-gray-400">
-              Generated automatically from the latest teacher number
+              Generated automatically from the
+              latest teacher number
             </p>
           </div>
         )}
       </Field>
 
-      <Field label="Full name">
-        <input
-          className={inputClass}
-          value={form.full_name}
-          onChange={(event) => update("full_name", event.target.value)}
-          placeholder="Juan Dela Cruz"
-          required
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-[120px_minmax(0,1fr)]">
+        <Field label="Title">
+          <select
+            className={inputClass}
+            value={form.title}
+            onChange={(event) =>
+              update("title", event.target.value)
+            }
+            required
+          >
+            <option value="Mr.">Mr.</option>
+            <option value="Mrs.">Mrs.</option>
+            <option value="Ms.">Ms.</option>
+          </select>
+        </Field>
+
+        <Field label="First name">
+          <input
+            className={inputClass}
+            value={form.first_name}
+            onChange={(event) =>
+              update(
+                "first_name",
+                event.target.value,
+              )
+            }
+            placeholder="Juan"
+            required
+          />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Middle name">
+          <input
+            className={inputClass}
+            value={form.middle_name}
+            onChange={(event) =>
+              update(
+                "middle_name",
+                event.target.value,
+              )
+            }
+            placeholder="Dela"
+          />
+
+          <p className="mt-1 text-xs text-gray-400">
+            Optional
+          </p>
+        </Field>
+
+        <Field label="Last name">
+          <input
+            className={inputClass}
+            value={form.last_name}
+            onChange={(event) =>
+              update(
+                "last_name",
+                event.target.value,
+              )
+            }
+            placeholder="Cruz"
+            required
+          />
+        </Field>
+      </div>
+
+      <Field label="Complete name">
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5">
+          <p
+            className={`text-sm font-medium ${buildTeacherFullName(form)
+                ? "text-slate-700"
+                : "text-gray-400"
+              }`}
+          >
+            {buildTeacherFullName(form) ||
+              "Complete the name fields"}
+          </p>
+        </div>
       </Field>
 
-      <Field label="Email">
-        <input
-          className={inputClass}
-          type="email"
-          value={form.email}
-          onChange={(event) => update("email", event.target.value)}
-          placeholder="teacher@ejist.edu.ph"
-          required
-        />
+      <Field label="School email">
+        {isEditing ? (
+          <input
+            className={inputClass}
+            type="email"
+            value={form.email}
+            onChange={(event) =>
+              update("email", event.target.value)
+            }
+            placeholder="teacher@ejist.edu.ph"
+            required
+          />
+        ) : (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5">
+            <p
+              className={`break-all text-sm font-medium ${form.email
+                  ? "text-slate-700"
+                  : "text-gray-400"
+                }`}
+            >
+              {form.email ||
+                "Enter the teacher's last name"}
+            </p>
+
+            <p className="mt-0.5 text-xs text-gray-400">
+              Generated automatically using the
+              last name
+            </p>
+          </div>
+        )}
       </Field>
 
       <Field
-        label={isEditing ? "New password (optional)" : "Temporary password"}
+        label={
+          isEditing
+            ? "New password (optional)"
+            : "Temporary password"
+        }
       >
         <div className="relative">
           <input
             className={`${inputClass} pr-11`}
-            type={showPassword ? "text" : "password"}
+            type={
+              showPassword
+                ? "text"
+                : "password"
+            }
             value={form.password}
-            onChange={(event) => update("password", event.target.value)}
+            onChange={(event) =>
+              update(
+                "password",
+                event.target.value,
+              )
+            }
             placeholder={
               isEditing
                 ? "Leave blank to keep current password"
                 : "Minimum 8 characters"
             }
-            minLength={form.password ? 8 : undefined}
+            minLength={
+              form.password ? 8 : undefined
+            }
             autoComplete="new-password"
             required={!isEditing}
           />
 
           <button
             type="button"
-            onClick={() => setShowPassword((current) => !current)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md text-gray-400 hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            title={showPassword ? "Hide password" : "Show password"}
+            onClick={() =>
+              setShowPassword(
+                (current) => !current,
+              )
+            }
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md text-gray-400 hover:text-gray-700"
+            aria-label={
+              showPassword
+                ? "Hide password"
+                : "Show password"
+            }
           >
             {showPassword ? (
               <EyeOff className="h-4 w-4" />
@@ -174,50 +489,70 @@ function TeacherForm({
             )}
           </button>
         </div>
+
+        {!isEditing && (
+          <p className="mt-1 text-xs text-gray-400">
+            Default password: ejist123
+          </p>
+        )}
       </Field>
 
-      <Field label="Contact number">
-        <input
-          className={inputClass}
-          value={form.contact_number}
-          onChange={(event) =>
-            update(
-              "contact_number",
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Contact number">
+          <input
+            className={inputClass}
+            type="tel"
+            value={form.contact_number}
+            onChange={(event) =>
+              update(
+                "contact_number",
+                event.target.value,
+              )
+            }
+            placeholder="0917 000 0000"
+          />
+        </Field>
 
-              event.target.value,
-            )
-          }
-          placeholder="0917 000 0000"
-        />
-      </Field>
+        <Field label="Employment type">
+          <select
+            className={inputClass}
+            value={form.employment_type}
+            onChange={(event) =>
+              update(
+                "employment_type",
+                event.target.value,
+              )
+            }
+          >
+            <option value="full_time">
+              Full-time
+            </option>
 
-      <Field label="Employment type">
-        <select
-          className={inputClass}
-          value={form.employment_type}
-          onChange={(event) =>
-            update(
-              "employment_type",
-
-              event.target.value,
-            )
-          }
-        >
-          <option value="full_time">Full-time</option>
-
-          <option value="part_time">Part-time</option>
-        </select>
-      </Field>
+            <option value="part_time">
+              Part-time
+            </option>
+          </select>
+        </Field>
+      </div>
 
       <Field label="Account status">
         <select
           className={inputClass}
           value={form.status}
-          onChange={(event) => update("status", event.target.value)}
+          onChange={(event) =>
+            update(
+              "status",
+              event.target.value,
+            )
+          }
         >
-          <option value="active">Active</option>
+          <option value="active">
+            Active
+          </option>
 
-          <option value="inactive">Inactive</option>
+          <option value="inactive">
+            Inactive
+          </option>
         </select>
       </Field>
 
@@ -226,15 +561,20 @@ function TeacherForm({
           type="button"
           onClick={onCancel}
           disabled={saving}
-          className="flex-1 py-2.5 rounded-lg text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 disabled:opacity-60"
+          className="flex-1 rounded-lg bg-gray-100 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-60"
         >
           Cancel
         </button>
 
         <button
           type="submit"
-          disabled={saving}
-          className="flex-1 py-2.5 rounded-lg text-sm font-medium text-white bg-slate-800 hover:bg-slate-900 disabled:opacity-60 disabled:cursor-not-allowed"
+          disabled={
+            saving ||
+            !form.first_name.trim() ||
+            !form.last_name.trim() ||
+            !form.email
+          }
+          className="flex-1 rounded-lg bg-slate-800 py-2.5 text-sm font-medium text-white hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {saving ? "Saving..." : "Save"}
         </button>
@@ -245,12 +585,10 @@ function TeacherForm({
 
 export default function TeacherModule({
   teachers,
-
   setTeachers,
-
   loading,
-
   error,
+  canDelete = false,
 }) {
   const [modalMode, setModalMode] = useState(null);
 
@@ -365,8 +703,16 @@ export default function TeacherModule({
   }
 
   async function handleDelete(teacher) {
+    if (!canDelete) {
+      setActionError(
+        "Only a super administrator can delete teacher accounts.",
+      );
+
+      return;
+    }
+
     const confirmed = window.confirm(
-      `Permanently delete teacher "${teacher.full_name}"?`,
+      `Permanently delete teacher "${teacher.full_name}"?\n\nThis will also delete the teacher's login account and cannot be undone.`,
     );
 
     if (!confirmed) return;
@@ -376,21 +722,24 @@ export default function TeacherModule({
     try {
       await callTeacherFunction({
         action: "delete",
-
         id: teacher.id,
       });
 
       setTeachers((currentTeachers) =>
-        currentTeachers.filter((item) => item.id !== teacher.id),
+        currentTeachers.filter(
+          (item) => item.id !== teacher.id,
+        ),
       );
-    } catch (error) {
+    } catch (deleteError) {
       console.error(
         "Teacher deletion failed:",
-
-        error,
+        deleteError,
       );
 
-      setActionError(error.message || "Unable to delete the teacher.");
+      setActionError(
+        deleteError.message ||
+        "Unable to delete the teacher.",
+      );
     }
   }
 
@@ -468,12 +817,14 @@ export default function TeacherModule({
                       disabled={saving}
                       onEdit={() => {
                         setSelected(teacher);
-
                         setActionError("");
-
                         setModalMode("edit");
                       }}
-                      onDelete={() => handleDelete(teacher)}
+                      onDelete={
+                        canDelete
+                          ? () => handleDelete(teacher)
+                          : undefined
+                      }
                     />
                   </td>
                 </tr>

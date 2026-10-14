@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import SubjectImage from "../subjectImage";
+import StudentPerformanceSummary from "./studentPerformanceSummary";
 
 const inputClass =
   "w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60";
@@ -112,11 +113,10 @@ function PasswordRequirement({
 }) {
   return (
     <li
-      className={`flex items-center gap-2 text-xs ${
-        valid
+      className={`flex items-center gap-2 text-xs ${valid
           ? "text-green-600"
           : "text-gray-400"
-      }`}
+        }`}
     >
       <CheckCircle2 className="h-3.5 w-3.5" />
       {children}
@@ -217,14 +217,14 @@ export default function StudentProfile({
     matching:
       Boolean(
         passwordForm.confirmPassword &&
-          passwordForm.newPassword ===
-            passwordForm.confirmPassword,
+        passwordForm.newPassword ===
+        passwordForm.confirmPassword,
       ),
 
     different:
       Boolean(passwordForm.newPassword) &&
       passwordForm.newPassword !==
-        passwordForm.currentPassword,
+      passwordForm.currentPassword,
   };
 
   function updatePasswordField(field, value) {
@@ -385,7 +385,7 @@ export default function StudentProfile({
 
       setPasswordError(
         changeError.message ||
-          "Unable to change your password.",
+        "Unable to change your password.",
       );
     } finally {
       setSavingPassword(false);
@@ -454,11 +454,10 @@ export default function StudentProfile({
             </div>
 
             <span
-              className={`w-fit rounded-full px-3 py-1.5 text-xs font-medium capitalize ${
-                student?.status === "active"
+              className={`w-fit rounded-full px-3 py-1.5 text-xs font-medium capitalize ${student?.status === "active"
                   ? "bg-green-100 text-green-700"
                   : "bg-gray-100 text-gray-600"
-              }`}
+                }`}
             >
               {student?.status || "Unknown"}
             </span>
@@ -549,6 +548,11 @@ export default function StudentProfile({
               information needs to be corrected.
             </p>
           </section>
+
+          <StudentPerformanceSummary
+            student={student}
+            classes={classes}
+          />
 
           <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm sm:p-6">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">

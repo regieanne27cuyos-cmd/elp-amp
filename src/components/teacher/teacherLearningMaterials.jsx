@@ -1,38 +1,36 @@
-import { useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   BookOpen,
-  Download,
   ExternalLink,
-  File,
-  FileArchive,
   FileText,
   FolderOpen,
-  Image,
   Link2,
-  Loader2,
   RefreshCw,
-  Search,
-  Users,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import useTeacherLearningMaterials from "../../hooks/useTeacherLearningMaterials";
+import FilePreviewLink from "../filePreviewLink";
+import useTeacherClasses from "../../hooks/useTeacherClasses";
 
-const MODULE_BUCKET = "learning-materials";
-
-const selectClass =
-  "w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100";
+const MATERIALS_BUCKET =
+  "learning-materials";
 
 function formatFileSize(bytes) {
   const size = Number(bytes);
 
-  if (!size) return "";
-
-  if (size < 1024) {
-    return `${size} B`;
+  if (!Number.isFinite(size) || size <= 0) {
+    return "";
   }
 
   if (size < 1024 * 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
+    return `${Math.max(
+      1,
+      Math.round(size / 1024),
+    )} KB`;
   }
 
   return `${(
@@ -41,424 +39,485 @@ function formatFileSize(bytes) {
   ).toFixed(1)} MB`;
 }
 
-function getFileIcon(resource) {
-  const type = String(
-    resource.file_type || "",
-  ).toLowerCase();
+function formatDate(value) {
+  if (!value) return "Date unavailable";
 
-  const name = String(
-    resource.file_name || "",
-  ).toLowerCase();
-
-  if (
-    type.startsWith("image/") ||
-    /\.(png|jpg|jpeg|gif|webp)$/.test(name)
-  ) {
-    return Image;
-  }
-
-  if (
-    type.includes("pdf") ||
-    name.endsWith(".pdf")
-  ) {
-    return FileText;
-  }
-
-  if (
-    /\.(zip|rar|7z)$/.test(name)
-  ) {
-    return FileArchive;
-  }
-
-  if (
-    resource.external_url ||
-    resource.resource_type === "link"
-  ) {
-    return Link2;
-  }
-
-  return File;
+  return new Date(value).toLocaleDateString(
+    "en-PH",
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    },
+  );
 }
 
-function ResourceItem({
-  resource,
-  onDownload,
-  downloading,
-}) {
-  const Icon = getFileIcon(resource);
-  const isLink = Boolean(
-    resource.external_url,
-  );
+function MaterialResource({ resource }) {
+  if (resource.file_path) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100">
+            <FileText className="h-5 w-5 text-blue-600" />
+          </div>
 
-  return (
-    <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100">
-        <Icon className="h-5 w-5 text-blue-600" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-gray-700">
+              {resource.file_name ||
+                "Learning material"}
+            </p>
+
+            <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-gray-400">
+              {resource.file_type && (
+                <span>
+                  {resource.file_type}
+                </span>
+              )}
+
+              {resource.file_size && (
+                <span>
+                  {formatFileSize(
+                    resource.file_size,
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="shrink-0">
+          <FilePreviewLink
+            bucket={MATERIALS_BUCKET}
+            path={resource.file_path}
+            fileName="Open File"
+          />
+        </div>
       </div>
+    );
+  }
 
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-gray-800">
-          {resource.file_name ||
-            resource.external_url ||
-            "Learning resource"}
-        </p>
+  if (resource.external_url) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-100">
+            <Link2 className="h-5 w-5 text-purple-600" />
+          </div>
 
-        <p className="mt-0.5 text-xs text-gray-400">
-          {isLink
-            ? "External link"
-            : formatFileSize(
-                resource.file_size,
-              ) || "Uploaded file"}
-        </p>
-      </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-700">
+              External learning resource
+            </p>
 
-      {isLink ? (
+            <p className="max-w-md truncate text-xs text-gray-400">
+              {resource.external_url}
+            </p>
+          </div>
+        </div>
+
         <a
           href={resource.external_url}
           target="_blank"
-          rel="noopener noreferrer"
-          className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
-          aria-label="Open external resource"
+          rel="noreferrer"
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-purple-100 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-200"
         >
+          Open Link
           <ExternalLink className="h-4 w-4" />
         </a>
-      ) : (
-        <button
-          type="button"
-          onClick={() =>
-            onDownload(resource)
-          }
-          disabled={
-            !resource.file_path ||
-            downloading
-          }
-          className="rounded-lg p-2 text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40"
-          aria-label={`Download ${
-            resource.file_name || "resource"
-          }`}
-        >
-          {downloading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
-          )}
-        </button>
-      )}
-    </div>
-  );
+      </div>
+    );
+  }
+
+  return null;
 }
 
-function ModuleCard({
-  module,
-  onDownload,
-  downloadingId,
+function MaterialCard({
+  material,
+  resources,
 }) {
   return (
     <article className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h4 className="font-semibold text-gray-900">
-            {module.title}
-          </h4>
-
-          {module.description && (
-            <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-gray-500">
-              {module.description}
-            </p>
-          )}
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50">
+          <FileText className="h-5 w-5 text-blue-600" />
         </div>
 
-        <span
-          className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
-            module.status === "published"
-              ? "bg-green-100 text-green-700"
-              : "bg-gray-100 text-gray-600"
-          }`}
-        >
-          {module.status || "draft"}
-        </span>
-      </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="font-semibold text-gray-900">
+                {material.title ||
+                  "Untitled learning module"}
+              </h3>
 
-      <div className="mt-4 space-y-2">
-        {module.resources.map(
-          (resource) => (
-            <ResourceItem
-              key={resource.id}
-              resource={resource}
-              onDownload={onDownload}
-              downloading={
-                downloadingId === resource.id
-              }
-            />
-          ),
-        )}
+              <p className="mt-1 text-xs text-gray-400">
+                Added{" "}
+                {formatDate(
+                  material.created_at,
+                )}
+              </p>
+            </div>
 
-        {module.resources.length === 0 && (
-          <div className="rounded-lg border border-dashed border-gray-200 px-4 py-5 text-center text-sm text-gray-400">
-            This module does not have any files
-            or links.
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${material.status === "published"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-gray-100 text-gray-600"
+                }`}
+            >
+              {material.status === "published"
+                ? "Published"
+                : "Draft"}
+            </span>
           </div>
-        )}
+
+          {material.description && (
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-500">
+              {material.description}
+            </p>
+          )}
+
+          {resources.length > 0 ? (
+            <div className="mt-4 space-y-3">
+              {resources.map((resource) => (
+                <MaterialResource
+                  key={resource.id}
+                  resource={resource}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-400">
+              No file or external resource attached.
+            </div>
+          )}
+        </div>
       </div>
     </article>
   );
 }
 
-export default function TeacherLearningMaterials() {
+function SectionGroup({
+  classRecord,
+  materials,
+  resourcesByModule,
+  onOpenClass,
+}) {
+  const sectionName =
+    classRecord.section?.section_name ||
+    "Section unavailable";
+
+  const gradeLevel =
+    classRecord.section?.grade_level || "—";
+
+  return (
+    <div className="border-t border-gray-100 first:border-t-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-50 px-5 py-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-800">
+            Grade {gradeLevel} · {sectionName}
+          </p>
+
+          <p className="text-xs text-gray-400">
+            {materials.length}{" "}
+            {materials.length === 1
+              ? "module"
+              : "modules"}
+          </p>
+        </div>
+
+        {onOpenClass && (
+          <button
+            type="button"
+            onClick={() =>
+              onOpenClass(
+                classRecord,
+                "modules",
+              )
+            }
+            className="text-sm font-medium text-blue-600 hover:underline"
+          >
+            Open class modules
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-2">
+        {materials.map((material) => (
+          <MaterialCard
+            key={material.id}
+            material={material}
+            resources={
+              resourcesByModule.get(
+                material.id,
+              ) || []
+            }
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function TeacherLearningMaterials({
+  onOpenClass,
+}) {
   const {
-    materials,
-    loading,
-    error,
-    reload,
-  } = useTeacherLearningMaterials();
+    classes = [],
+    loading: classesLoading,
+    error: classesError,
+    reload: reloadClasses,
+  } = useTeacherClasses();
 
-  const [search, setSearch] =
+  const [materials, setMaterials] =
+    useState([]);
+
+  const [resources, setResources] =
+    useState([]);
+
+  const [materialsLoading, setMaterialsLoading] =
+    useState(true);
+
+  const [materialsError, setMaterialsError] =
     useState("");
-  const [sectionId, setSectionId] =
-    useState("");
-  const [downloadingId, setDownloadingId] =
-    useState(null);
-  const [downloadError, setDownloadError] =
-    useState("");
 
-  const sections = useMemo(() => {
-    const options = new Map();
+  const loadMaterials =
+    useCallback(async () => {
+      if (classesLoading) return;
 
-    materials.forEach((module) => {
-      const section =
-        module.classRecord?.section;
+      const assignmentIds = classes
+        .map(
+          (classRecord) =>
+            classRecord.id,
+        )
+        .filter(Boolean);
 
-      const id =
-        module.classRecord?.section_id ||
-        section?.id;
+      if (assignmentIds.length === 0) {
+        setMaterials([]);
+        setResources([]);
+        setMaterialsLoading(false);
+        return;
+      }
 
-      if (!id) return;
+      setMaterialsLoading(true);
+      setMaterialsError("");
 
-      options.set(id, {
-        id,
-        label: `Grade ${
-          section?.grade_level || "—"
-        } · ${
-          section?.section_name ||
-          "Unknown section"
-        }`,
-      });
+      try {
+        const {
+          data: moduleData,
+          error: moduleError,
+        } = await supabase
+          .from("learning_modules")
+          .select(`
+            id,
+            teaching_assignment_id,
+            title,
+            description,
+            status,
+            created_at,
+            updated_at
+          `)
+          .in(
+            "teaching_assignment_id",
+            assignmentIds,
+          )
+          .order("created_at", {
+            ascending: false,
+          });
+
+        if (moduleError) {
+          throw moduleError;
+        }
+
+        const loadedMaterials =
+          moduleData || [];
+
+        const moduleIds =
+          loadedMaterials.map(
+            (material) => material.id,
+          );
+
+        let loadedResources = [];
+
+        if (moduleIds.length > 0) {
+          const {
+            data: resourceData,
+            error: resourceError,
+          } = await supabase
+            .from("module_resources")
+            .select(`
+              id,
+              module_id,
+              resource_type,
+              file_name,
+              file_path,
+              file_type,
+              file_size,
+              external_url,
+              created_at
+            `)
+            .in("module_id", moduleIds)
+            .order("created_at", {
+              ascending: true,
+            });
+
+          if (resourceError) {
+            throw resourceError;
+          }
+
+          loadedResources =
+            resourceData || [];
+        }
+
+        setMaterials(loadedMaterials);
+        setResources(loadedResources);
+      } catch (loadError) {
+        console.error(
+          "Failed to load learning materials:",
+          loadError,
+        );
+
+        setMaterials([]);
+        setResources([]);
+
+        setMaterialsError(
+          loadError.message ||
+          "Unable to load learning materials.",
+        );
+      } finally {
+        setMaterialsLoading(false);
+      }
+    }, [classes, classesLoading]);
+
+  useEffect(() => {
+    loadMaterials();
+  }, [loadMaterials]);
+
+  const classMap = useMemo(
+    () =>
+      new Map(
+        classes.map((classRecord) => [
+          classRecord.id,
+          classRecord,
+        ]),
+      ),
+    [classes],
+  );
+
+  const resourcesByModule = useMemo(() => {
+    const grouped = new Map();
+
+    resources.forEach((resource) => {
+      if (!grouped.has(resource.module_id)) {
+        grouped.set(
+          resource.module_id,
+          [],
+        );
+      }
+
+      grouped
+        .get(resource.module_id)
+        .push(resource);
     });
 
-    return Array.from(options.values()).sort(
-      (first, second) =>
-        first.label.localeCompare(
-          second.label,
-          undefined,
-          { numeric: true },
-        ),
-    );
-  }, [materials]);
+    return grouped;
+  }, [resources]);
 
-  const groupedMaterials = useMemo(() => {
-    const normalizedSearch = search
-      .trim()
-      .toLowerCase();
+  const subjectGroups = useMemo(() => {
+    const groups = new Map();
 
-    const filtered = materials.filter(
-      (module) => {
-        const classRecord =
-          module.classRecord;
+    materials.forEach((material) => {
+      const classRecord = classMap.get(
+        material.teaching_assignment_id,
+      );
 
-        if (
-          sectionId &&
-          classRecord?.section_id !==
-            sectionId &&
-          classRecord?.section?.id !==
-            sectionId
-        ) {
-          return false;
-        }
+      if (!classRecord) return;
 
-        if (!normalizedSearch) {
-          return true;
-        }
+      const subject =
+        classRecord.subject;
 
-        const resourceNames =
-          module.resources
-            .map(
-              (resource) =>
-                resource.file_name ||
-                resource.external_url ||
-                "",
-            )
-            .join(" ");
+      const subjectId =
+        subject?.id ||
+        classRecord.subject_id ||
+        "unknown-subject";
 
-        const searchableText = [
-          module.title,
-          module.description,
-          classRecord?.subject
-            ?.subject_name,
-          classRecord?.subject
-            ?.subject_code,
-          classRecord?.section
-            ?.section_name,
-          classRecord?.section
-            ?.grade_level,
-          resourceNames,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        return searchableText.includes(
-          normalizedSearch,
-        );
-      },
-    );
-
-    const sectionGroups = new Map();
-
-    filtered.forEach((module) => {
-      const classRecord =
-        module.classRecord;
-
-      const section =
-        classRecord?.section;
-
-      const currentSectionId =
-        classRecord?.section_id ||
-        section?.id ||
-        "unassigned";
-
-      if (
-        !sectionGroups.has(currentSectionId)
-      ) {
-        sectionGroups.set(currentSectionId, {
-          id: currentSectionId,
-          section,
-          subjects: new Map(),
+      if (!groups.has(subjectId)) {
+        groups.set(subjectId, {
+          id: subjectId,
+          subject,
+          sections: new Map(),
         });
       }
 
-      const sectionGroup =
-        sectionGroups.get(currentSectionId);
+      const subjectGroup =
+        groups.get(subjectId);
 
-      const subject =
-        classRecord?.subject;
-
-      const subjectId =
-        classRecord?.subject_id ||
-        subject?.id ||
-        "unknown-subject";
+      const sectionId =
+        classRecord.section?.id ||
+        classRecord.section_id ||
+        classRecord.id;
 
       if (
-        !sectionGroup.subjects.has(
-          subjectId,
+        !subjectGroup.sections.has(
+          sectionId,
         )
       ) {
-        sectionGroup.subjects.set(
-          subjectId,
+        subjectGroup.sections.set(
+          sectionId,
           {
-            id: subjectId,
-            subject,
-            modules: [],
+            id: sectionId,
+            classRecord,
+            materials: [],
           },
         );
       }
 
-      sectionGroup.subjects
-        .get(subjectId)
-        .modules.push(module);
+      subjectGroup.sections
+        .get(sectionId)
+        .materials.push(material);
     });
 
-    return Array.from(
-      sectionGroups.values(),
-    )
+    return Array.from(groups.values())
       .map((group) => ({
         ...group,
-        subjects: Array.from(
-          group.subjects.values(),
+        sections: Array.from(
+          group.sections.values(),
         ).sort((first, second) =>
           String(
-            first.subject?.subject_name ||
-              "",
+            first.classRecord.section
+              ?.section_name || "",
           ).localeCompare(
             String(
-              second.subject?.subject_name ||
-                "",
+              second.classRecord.section
+                ?.section_name || "",
             ),
+            undefined,
+            {
+              numeric: true,
+            },
           ),
         ),
       }))
-      .sort((first, second) => {
-        const firstName =
-          first.section?.section_name || "";
-
-        const secondName =
-          second.section?.section_name || "";
-
-        return firstName.localeCompare(
-          secondName,
-          undefined,
-          { numeric: true },
-        );
-      });
-  }, [materials, search, sectionId]);
-
-  async function handleDownload(resource) {
-    if (!resource.file_path) return;
-
-    setDownloadingId(resource.id);
-    setDownloadError("");
-
-    try {
-      const {
-        data,
-        error: signedUrlError,
-      } = await supabase.storage
-        .from(MODULE_BUCKET)
-        .createSignedUrl(
-          resource.file_path,
-          60,
-          {
-            download:
-              resource.file_name ||
-              "learning-material",
-          },
-        );
-
-      if (signedUrlError) {
-        throw signedUrlError;
-      }
-
-      const link =
-        document.createElement("a");
-
-      link.href = data.signedUrl;
-      link.download =
-        resource.file_name ||
-        "learning-material";
-
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (downloadFailure) {
-      console.error(
-        "Learning-material download failed:",
-        downloadFailure,
+      .sort((first, second) =>
+        String(
+          first.subject?.subject_name || "",
+        ).localeCompare(
+          String(
+            second.subject?.subject_name || "",
+          ),
+        ),
       );
+  }, [materials, classMap]);
 
-      setDownloadError(
-        downloadFailure.message ||
-          "Unable to download this material.",
-      );
-    } finally {
-      setDownloadingId(null);
-    }
+  const loading =
+    classesLoading || materialsLoading;
+
+  const error =
+    classesError || materialsError;
+
+  async function handleRefresh() {
+    await reloadClasses?.();
+    await loadMaterials();
   }
-
-  const moduleCount = materials.length;
-
-  const resourceCount = materials.reduce(
-    (total, module) =>
-      total + module.resources.length,
-    0,
-  );
 
   return (
     <div className="space-y-6">
@@ -469,241 +528,162 @@ export default function TeacherLearningMaterials() {
           </h1>
 
           <p className="mt-1 text-sm text-gray-500">
-            Files and links uploaded to your
-            assigned classes
+            Files uploaded to your assigned
+            classes, organized by subject and
+            section.
           </p>
         </div>
 
         <button
           type="button"
-          onClick={reload}
+          onClick={handleRefresh}
           disabled={loading}
           className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
           <RefreshCw
-            className={`h-4 w-4 ${
-              loading ? "animate-spin" : ""
-            }`}
+            className={`h-4 w-4 ${loading ? "animate-spin" : ""
+              }`}
           />
 
           Refresh
         </button>
       </header>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <BookOpen className="h-5 w-5 text-blue-600" />
+      {!loading && !error && (
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <FolderOpen className="h-6 w-6 text-blue-600" />
 
-          <p className="mt-3 text-sm text-gray-500">
-            Modules
-          </p>
+            <p className="mt-3 text-sm text-gray-500">
+              Total Modules
+            </p>
 
-          <p className="text-2xl font-bold text-gray-900">
-            {loading ? "—" : moduleCount}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <FileText className="h-5 w-5 text-green-600" />
-
-          <p className="mt-3 text-sm text-gray-500">
-            Files and Links
-          </p>
-
-          <p className="text-2xl font-bold text-gray-900">
-            {loading ? "—" : resourceCount}
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-          <Users className="h-5 w-5 text-purple-600" />
-
-          <p className="mt-3 text-sm text-gray-500">
-            Sections
-          </p>
-
-          <p className="text-2xl font-bold text-gray-900">
-            {loading ? "—" : sections.length}
-          </p>
-        </div>
-      </div>
-
-      <section className="grid grid-cols-1 gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm md:grid-cols-[minmax(0,1fr)_280px]">
-        <div>
-          <label
-            htmlFor="material-search"
-            className="mb-1.5 block text-sm font-medium text-gray-700"
-          >
-            Search materials
-          </label>
-
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-
-            <input
-              id="material-search"
-              type="search"
-              value={search}
-              onChange={(event) =>
-                setSearch(event.target.value)
-              }
-              placeholder="Search subject, module, or file..."
-              className={`${selectClass} pl-9`}
-            />
+            <p className="mt-1 text-2xl font-bold text-gray-900">
+              {materials.length}
+            </p>
           </div>
-        </div>
 
-        <div>
-          <label
-            htmlFor="material-section"
-            className="mb-1.5 block text-sm font-medium text-gray-700"
-          >
-            Section
-          </label>
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <BookOpen className="h-6 w-6 text-purple-600" />
 
-          <select
-            id="material-section"
-            value={sectionId}
-            onChange={(event) =>
-              setSectionId(
-                event.target.value,
-              )
-            }
-            className={selectClass}
-          >
-            <option value="">
-              All sections
-            </option>
+            <p className="mt-3 text-sm text-gray-500">
+              Subjects
+            </p>
 
-            {sections.map((section) => (
-              <option
-                key={section.id}
-                value={section.id}
-              >
-                {section.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </section>
+            <p className="mt-1 text-2xl font-bold text-gray-900">
+              {subjectGroups.length}
+            </p>
+          </div>
 
-      {(error || downloadError) && (
-        <div
-          role="alert"
-          className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
-        >
-          {downloadError || error}
-        </div>
+          <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+            <FileText className="h-6 w-6 text-green-600" />
+
+            <p className="mt-3 text-sm text-gray-500">
+              Files and Links
+            </p>
+
+            <p className="mt-1 text-2xl font-bold text-gray-900">
+              {resources.length}
+            </p>
+          </div>
+        </section>
       )}
 
       {loading && (
-        <div className="flex min-h-64 items-center justify-center rounded-2xl border border-gray-100 bg-white">
-          <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+        <div className="rounded-2xl border border-gray-100 bg-white p-12 text-center text-sm text-gray-400 shadow-sm">
+          Loading learning materials...
+        </div>
+      )}
 
-          <span className="ml-3 text-sm text-gray-500">
-            Loading learning materials...
-          </span>
+      {!loading && error && (
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-100 bg-red-50 p-5 text-sm text-red-700"
+        >
+          <p>{error}</p>
+
+          <button
+            type="button"
+            onClick={handleRefresh}
+            className="mt-3 font-medium hover:underline"
+          >
+            Try again
+          </button>
         </div>
       )}
 
       {!loading &&
         !error &&
-        groupedMaterials.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center">
-            <FolderOpen className="mx-auto h-9 w-9 text-gray-300" />
+        subjectGroups.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center">
+            <FolderOpen className="mx-auto h-10 w-10 text-gray-300" />
 
-            <h2 className="mt-3 font-semibold text-gray-800">
-              No learning materials found
+            <h2 className="mt-3 font-semibold text-gray-700">
+              No learning materials yet
             </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
-              Upload modules inside one of your
-              assigned classes.
+            <p className="mt-1 text-sm text-gray-400">
+              Materials uploaded through the
+              Modules tab will appear here.
             </p>
           </div>
         )}
 
       {!loading &&
         !error &&
-        groupedMaterials.map(
-          (sectionGroup) => (
-            <section
-              key={sectionGroup.id}
-              className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm"
-            >
-              <div className="border-b border-gray-100 bg-slate-800 px-5 py-4 text-white">
-                <p className="text-xs text-slate-300">
-                  Grade{" "}
-                  {sectionGroup.section
-                    ?.grade_level || "—"}
+        subjectGroups.map((group) => (
+          <section
+            key={group.id}
+            className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm"
+          >
+            <div className="flex items-center gap-3 border-b border-gray-100 bg-slate-800 px-5 py-4 text-white">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10">
+                <BookOpen className="h-5 w-5" />
+              </div>
+
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-slate-300">
+                  {group.subject?.subject_code ||
+                    "SUBJECT"}
                 </p>
 
-                <h2 className="font-bold">
-                  {sectionGroup.section
-                    ?.section_name ||
-                    "Unknown section"}
+                <h2 className="truncate font-semibold">
+                  {group.subject
+                    ?.subject_name ||
+                    "Subject unavailable"}
                 </h2>
               </div>
 
-              <div className="space-y-6 p-5">
-                {sectionGroup.subjects.map(
-                  (subjectGroup) => (
-                    <div
-                      key={subjectGroup.id}
-                    >
-                      <div className="mb-3 flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100">
-                          <BookOpen className="h-4 w-4 text-blue-600" />
-                        </div>
+              <span className="ml-auto rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium">
+                {group.sections.reduce(
+                  (total, section) =>
+                    total +
+                    section.materials.length,
+                  0,
+                )}{" "}
+                modules
+              </span>
+            </div>
 
-                        <div>
-                          <h3 className="font-semibold text-gray-900">
-                            {subjectGroup.subject
-                              ?.subject_name ||
-                              "Unknown subject"}
-                          </h3>
-
-                          <p className="text-xs text-gray-400">
-                            {subjectGroup.subject
-                              ?.subject_code ||
-                              "No subject code"}
-                            {" · "}
-                            {
-                              subjectGroup.modules
-                                .length
-                            }{" "}
-                            module
-                            {subjectGroup.modules
-                              .length === 1
-                              ? ""
-                              : "s"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                        {subjectGroup.modules.map(
-                          (module) => (
-                            <ModuleCard
-                              key={module.id}
-                              module={module}
-                              onDownload={
-                                handleDownload
-                              }
-                              downloadingId={
-                                downloadingId
-                              }
-                            />
-                          ),
-                        )}
-                      </div>
-                    </div>
-                  ),
-                )}
-              </div>
-            </section>
-          ),
-        )}
+            {group.sections.map(
+              (section) => (
+                <SectionGroup
+                  key={section.id}
+                  classRecord={
+                    section.classRecord
+                  }
+                  materials={
+                    section.materials
+                  }
+                  resourcesByModule={
+                    resourcesByModule
+                  }
+                  onOpenClass={onOpenClass}
+                />
+              ),
+            )}
+          </section>
+        ))}
     </div>
   );
 }

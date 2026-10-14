@@ -1,28 +1,41 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   ArrowLeft,
   CheckCircle2,
-  Download,
   FileText,
   RefreshCw,
   Save,
   Users,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import FilePreviewLink from "../filePreviewLink";
+
+const SUBMISSION_BUCKET =
+  "student-submissions";
 
 function normalize(value) {
-  return Array.isArray(value) ? value[0] || null : value || null;
+  return Array.isArray(value)
+    ? value[0] || null
+    : value || null;
 }
 
 function formatDate(value) {
   if (!value) return "—";
-  return new Date(value).toLocaleString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+
+  return new Date(value).toLocaleString(
+    "en-PH",
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    },
+  );
 }
 
 function initials(name) {
@@ -40,14 +53,101 @@ function StudentName({ student }) {
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
         {initials(student?.full_name)}
       </div>
+
       <div>
         <p className="font-medium text-gray-900">
-          {student?.full_name || "Unknown student"}
+          {student?.full_name ||
+            "Unknown student"}
         </p>
+
         <p className="text-xs text-gray-400">
-          {student?.student_number || "No student number"}
+          {student?.student_number ||
+            "No student number"}
         </p>
       </div>
+    </div>
+  );
+}
+
+function SubmissionContent({
+  submission,
+}) {
+  if (!submission) {
+    return (
+      <span className="text-gray-400">
+        No submission
+      </span>
+    );
+  }
+
+  const hasText = Boolean(
+    submission.text_answer?.trim(),
+  );
+
+  const hasFile = Boolean(
+    submission.file_path,
+  );
+
+  if (!hasText && !hasFile) {
+    return (
+      <span className="text-gray-400">
+        No answer content
+      </span>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {hasText && (
+        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+          <p className="mb-1 text-xs font-medium text-gray-400">
+            Text answer
+          </p>
+
+          <p className="whitespace-pre-wrap text-sm leading-6 text-gray-700">
+            {submission.text_answer}
+          </p>
+        </div>
+      )}
+
+      {hasFile && (
+        <div>
+          <FilePreviewLink
+            bucket={
+              SUBMISSION_BUCKET
+            }
+            path={
+              submission.file_path
+            }
+            fileName={
+              submission.file_name
+                ? `View ${submission.file_name}`
+                : "View submitted file"
+            }
+          />
+
+          {(submission.file_type ||
+            submission.file_size) && (
+              <p className="mt-1 text-xs text-gray-400">
+                {[
+                  submission.file_type,
+                  submission.file_size
+                    ? `${Math.max(
+                      1,
+                      Math.round(
+                        Number(
+                          submission.file_size,
+                        ) / 1024,
+                      ),
+                    )} KB`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            )}
+        </div>
+      )}
     </div>
   );
 }
@@ -68,7 +168,6 @@ export default function TeacherActivitySubmissions({
   const [answerFeedback, setAnswerFeedback] = useState({});
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
-  const [downloadingId, setDownloadingId] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -210,28 +309,6 @@ export default function TeacherActivitySubmissions({
       ),
     [submissions],
   );
-
-  async function downloadSubmission(submission) {
-    if (!submission.file_path) return;
-    setDownloadingId(submission.id);
-    const { data, error: downloadError } = await supabase.storage
-      .from("student-submissions")
-      .createSignedUrl(submission.file_path, 60, {
-        download: submission.file_name || "submission",
-      });
-
-    if (downloadError) {
-      setError(downloadError.message);
-    } else {
-      const link = document.createElement("a");
-      link.href = data.signedUrl;
-      link.download = submission.file_name || "submission";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    }
-    setDownloadingId(null);
-  }
 
   async function gradeSubmission(
     submission,
@@ -453,7 +530,11 @@ export default function TeacherActivitySubmissions({
                   <tr key={student.student_id} className="border-t border-gray-100 align-top">
                     <td className="px-4 py-4"><StudentName student={student} /></td>
                     <td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${submission?.status === "graded" ? "bg-green-100 text-green-700" : submission?.status === "late" ? "bg-orange-100 text-orange-700" : submission ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"}`}>{submission?.status || "Missing"}</span>{submission && <p className="mt-2 text-xs text-gray-400">{formatDate(submission.submitted_at)}</p>}</td>
-                    <td className="max-w-[300px] px-4 py-4">{submission?.text_answer && <p className="mb-2 whitespace-pre-wrap text-sm text-gray-600">{submission.text_answer}</p>}{submission?.file_path && <button type="button" onClick={() => downloadSubmission(submission)} disabled={downloadingId === submission.id} className="flex items-center gap-2 text-sm font-medium text-blue-600 hover:underline"><Download className="h-4 w-4" />{submission.file_name || "Download file"}</button>}{!submission && <span className="text-gray-400">No submission</span>}</td>
+                    <td className="max-w-[360px] px-4 py-4">
+                      <SubmissionContent
+                        submission={submission}
+                      />
+                    </td>                    
                     <td className="px-4 py-4"><div className="flex w-28 items-center gap-1"><input type="number" min="0" max={activity.points} step="0.01" disabled={!submission} value={scores[student.student_id] ?? ""} onChange={(event) => setScores((current) => ({ ...current, [student.student_id]: event.target.value }))} className="w-full rounded-lg border border-gray-200 px-2 py-2 text-center outline-none focus:border-blue-400 disabled:bg-gray-50" /><span className="text-xs text-gray-400">/{Number(activity.points)}</span></div></td>
                     <td className="px-4 py-4"><textarea disabled={!submission} value={feedback[student.student_id] ?? ""} onChange={(event) => setFeedback((current) => ({ ...current, [student.student_id]: event.target.value }))} placeholder="Teacher feedback" className="min-h-20 w-56 resize-y rounded-lg border border-gray-200 px-3 py-2 outline-none focus:border-blue-400 disabled:bg-gray-50" /></td>
                     <td className="px-4 py-4 text-right"><button type="button" onClick={() => gradeSubmission(submission)} disabled={!submission || savingId === submission?.id} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"><CheckCircle2 className="h-4 w-4" />{savingId === submission?.id ? "Saving..." : "Grade"}</button></td>

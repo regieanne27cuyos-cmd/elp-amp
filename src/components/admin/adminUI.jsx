@@ -1,4 +1,3 @@
-import React from "react";
 import {
   Pencil,
   Plus,
@@ -13,14 +12,25 @@ export function Modal({
   title,
   onClose,
   children,
-  maxWidth = "max-w-md",
+  size = "md",
 }) {
+  const sizeClasses = {
+    sm: "max-w-sm",
+    md: "max-w-md",
+    lg: "max-w-2xl",
+    xl: "max-w-5xl",
+    full: "max-w-[95vw]",
+  };
+
+  const modalWidth =
+    sizeClasses[size] || sizeClasses.md;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div
-        className={`max-h-[90vh] w-full overflow-y-auto rounded-2xl bg-white shadow-xl ${maxWidth}`}
+        className={`max-h-[90vh] w-full ${modalWidth} overflow-y-auto rounded-2xl bg-white shadow-xl`}
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-100 bg-white px-6 py-4">
           <h2 className="font-bold text-gray-900">
             {title}
           </h2>
@@ -28,14 +38,16 @@ export function Modal({
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
             aria-label="Close modal"
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="p-6">{children}</div>
+        <div className="p-6">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -63,8 +75,8 @@ export function StatusBadge({ status }) {
   return (
     <span
       className={`text-xs font-medium px-2.5 py-1 rounded-full ${isActive
-          ? "bg-green-100 text-green-700"
-          : "bg-gray-100 text-gray-500"
+        ? "bg-green-100 text-green-700"
+        : "bg-gray-100 text-gray-500"
         }`}
     >
       {normalizedStatus.charAt(0).toUpperCase() +
@@ -108,29 +120,30 @@ export function SectionHeader({
 export function RowActions({
   onEdit,
   onDelete,
-  disabled = false,
 }) {
   return (
-    <div className="flex items-center justify-end gap-1">
-      <button
-        type="button"
-        onClick={onEdit}
-        disabled={disabled}
-        className="p-2 text-gray-400 hover:text-slate-700 hover:bg-gray-50 rounded-lg disabled:opacity-50"
-        aria-label="Edit"
-      >
-        <Pencil className="w-4 h-4" />
-      </button>
+    <div className="flex justify-end gap-1">
+      {onEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label="Edit record"
+          className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+      )}
 
-      <button
-        type="button"
-        onClick={onDelete}
-        disabled={disabled}
-        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
-        aria-label="Delete"
-      >
-        <Trash2 className="w-4 h-4" />
-      </button>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label="Delete record"
+          className="rounded-lg p-2 text-red-500 hover:bg-red-50"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }

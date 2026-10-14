@@ -9,7 +9,6 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock,
-  Download,
   FileText,
   Loader2,
   Paperclip,
@@ -17,6 +16,13 @@ import {
   Upload,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import FilePreviewLink from "../filePreviewLink";
+
+const INSTRUCTION_BUCKET =
+  "activity-instructions";
+
+const SUBMISSION_BUCKET =
+  "student-submissions";
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
@@ -186,15 +192,13 @@ function QuestionOptions({
           return (
             <label
               key={`${question.id}-${optionIndex}`}
-              className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm transition ${
-                disabled
-                  ? "cursor-not-allowed opacity-70"
-                  : "cursor-pointer"
-              } ${
-                selected
+              className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-sm transition ${disabled
+                ? "cursor-not-allowed opacity-70"
+                : "cursor-pointer"
+                } ${selected
                   ? "border-blue-300 bg-blue-50"
                   : "border-gray-100 hover:bg-gray-50"
-              }`}
+                }`}
             >
               <input
                 type="radio"
@@ -233,15 +237,13 @@ function QuestionOptions({
           return (
             <label
               key={option}
-              className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm ${
-                disabled
-                  ? "cursor-not-allowed opacity-70"
-                  : "cursor-pointer"
-              } ${
-                selected
+              className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-3 text-sm ${disabled
+                ? "cursor-not-allowed opacity-70"
+                : "cursor-pointer"
+                } ${selected
                   ? "border-blue-300 bg-blue-50"
                   : "border-gray-100 hover:bg-gray-50"
-              }`}
+                }`}
             >
               <input
                 type="radio"
@@ -298,8 +300,6 @@ export default function StudentActivityWork({
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [downloading, setDownloading] =
-    useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -308,8 +308,8 @@ export default function StudentActivityWork({
     () =>
       Boolean(
         activity?.due_at &&
-          new Date(activity.due_at).getTime() <
-            Date.now(),
+        new Date(activity.due_at).getTime() <
+        Date.now(),
       ),
     [activity?.due_at],
   );
@@ -441,7 +441,7 @@ export default function StudentActivityWork({
 
       setError(
         loadError.message ||
-          "Unable to load this activity.",
+        "Unable to load this activity.",
       );
     } finally {
       setLoading(false);
@@ -659,7 +659,7 @@ export default function StudentActivityWork({
 
       setError(
         submitError.message ||
-          "Unable to submit your work.",
+        "Unable to submit your work.",
       );
     } finally {
       setSaving(false);
@@ -691,8 +691,7 @@ export default function StudentActivityWork({
 
     if (unansweredQuestionIndex !== -1) {
       setError(
-        `Please answer question ${
-          unansweredQuestionIndex + 1
+        `Please answer question ${unansweredQuestionIndex + 1
         } before submitting.`,
       );
       return;
@@ -755,56 +754,10 @@ export default function StudentActivityWork({
 
       setError(
         submitError.message ||
-          "Unable to submit the quiz.",
+        "Unable to submit the quiz.",
       );
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function downloadSubmission() {
-    if (!submission?.file_path) return;
-
-    setDownloading(true);
-    setError("");
-
-    try {
-      const {
-        data,
-        error: signedUrlError,
-      } = await supabase.storage
-        .from("student-submissions")
-        .createSignedUrl(
-          submission.file_path,
-          60,
-          {
-            download:
-              submission.file_name ||
-              "submission",
-          },
-        );
-
-      if (signedUrlError) {
-        throw signedUrlError;
-      }
-
-      window.open(
-        data.signedUrl,
-        "_blank",
-        "noopener,noreferrer",
-      );
-    } catch (downloadError) {
-      console.error(
-        "Unable to download submission:",
-        downloadError,
-      );
-
-      setError(
-        downloadError.message ||
-          "Unable to download the submitted file.",
-      );
-    } finally {
-      setDownloading(false);
     }
   }
 
@@ -880,15 +833,48 @@ export default function StudentActivityWork({
             {activity.instructions ||
               "Follow the teacher's instructions."}
           </p>
+
+          {activity.file_path && (
+            <div className="mt-4 border-t border-gray-200 pt-4">
+              <p className="mb-2 text-xs font-medium text-gray-500">
+                Attached instruction file
+              </p>
+
+              <FilePreviewLink
+                bucket={INSTRUCTION_BUCKET}
+                path={activity.file_path}
+                fileName={
+                  activity.file_name
+                    ? `View ${activity.file_name}`
+                    : "View instructions"
+                }
+              />
+
+              {(activity.file_type ||
+                activity.file_size) && (
+                  <p className="mt-2 text-xs text-gray-400">
+                    {[
+                      activity.file_type,
+                      activity.file_size
+                        ? formatFileSize(
+                          activity.file_size,
+                        )
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                )}
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-3">
           <span
-            className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-              deadlinePassed
-                ? "bg-red-50 text-red-700"
-                : "bg-orange-50 text-orange-700"
-            }`}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium ${deadlinePassed
+              ? "bg-red-50 text-red-700"
+              : "bg-orange-50 text-orange-700"
+              }`}
           >
             Due: {formatDate(activity.due_at)}
           </span>
@@ -1107,7 +1093,7 @@ export default function StudentActivityWork({
                 Current submitted file
               </p>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex min-w-0 items-center gap-3">
                   <FileText className="h-5 w-5 shrink-0 text-blue-600" />
 
@@ -1118,27 +1104,27 @@ export default function StudentActivityWork({
                     </p>
 
                     <p className="text-xs text-gray-400">
-                      {formatFileSize(
-                        submission.file_size,
-                      )}
+                      {[
+                        submission.file_type,
+                        submission.file_size
+                          ? formatFileSize(
+                            submission.file_size,
+                          )
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") ||
+                        "Uploaded file"}
                     </p>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={downloadSubmission}
-                  disabled={downloading}
-                  className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-medium text-blue-600 shadow-sm hover:bg-blue-50 disabled:opacity-50"
-                >
-                  {downloading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-
-                  Download
-                </button>
+                <FilePreviewLink
+                  bucket={SUBMISSION_BUCKET}
+                  path={submission.file_path}
+                  fileName="Open submitted file"
+                  className="w-full shrink-0 sm:w-auto"
+                />
               </div>
             </div>
           )}

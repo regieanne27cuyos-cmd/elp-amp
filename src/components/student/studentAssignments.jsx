@@ -192,10 +192,7 @@ export default function StudentAssignments({
     useState("all");
 
   const dueActivities = useMemo(
-    () =>
-      activities.filter(
-        (activity) => activity.due_at,
-      ),
+    () => activities,
     [activities],
   );
 

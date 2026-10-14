@@ -1,9 +1,10 @@
 import { BookOpen } from "lucide-react";
-import AnnouncementList from "./announcementList";
 import TeacherMyClasses from "./teacherMyClasses";
 import TeacherCalendar from "./teacherCalendar";
 import TeacherProfile from "./teacherProfile";
 import TeacherSettings from "./teacherSettings";
+import TeacherAnnouncements from "./teacherAnnouncements";
+import TeacherLearningMaterials from "./teacherLearningMaterials";
 import {
   teacherBottomSidebarItems,
   teacherModuleDescriptions,
@@ -43,6 +44,7 @@ function EmptyModule({
 
 export default function TeacherModuleContent({
   activeView,
+  teacherProfile,
   announcements,
   announcementsLoading,
   announcementsError,
@@ -56,12 +58,24 @@ export default function TeacherModuleContent({
     );
   }
 
+  if (activeView === "materials") {
+    return (
+      <TeacherLearningMaterials
+        onOpenClass={onOpenClass}
+      />
+    );
+  }
+
   if (activeView === "calendar") {
     return <TeacherCalendar />;
   }
 
   if (activeView === "profile") {
-    return <TeacherProfile />;
+    return (
+      <TeacherProfile
+        teacherProfile={teacherProfile}
+      />
+    );
   }
 
   if (activeView === "settings") {
@@ -69,27 +83,7 @@ export default function TeacherModuleContent({
   }
 
   if (activeView === "announcements") {
-    return (
-      <div className="space-y-5">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">
-            Announcements
-          </h1>
-
-          <p className="mt-1 text-sm text-gray-500">
-            View active school announcements.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-          <AnnouncementList
-            announcements={announcements}
-            loading={announcementsLoading}
-            error={announcementsError}
-          />
-        </div>
-      </div>
-    );
+    return <TeacherAnnouncements />;
   }
 
   const navigationItem =
@@ -105,7 +99,9 @@ export default function TeacherModuleContent({
         "Teacher Module"
       }
       description={
-        teacherModuleDescriptions[activeView] ||
+        teacherModuleDescriptions[
+        activeView
+        ] ||
         "This teacher module is ready to be connected."
       }
       icon={Icon}

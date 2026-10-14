@@ -58,15 +58,16 @@ function gradingPeriodLabel(value) {
 function formatDate(value) {
   if (!value) return null;
 
-  return new Date(
-    value,
-  ).toLocaleString("en-PH", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return new Date(value).toLocaleString(
+    "en-PH",
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    },
+  );
 }
 
 function ModuleCard({
@@ -74,13 +75,12 @@ function ModuleCard({
   saving,
   onEdit,
   onDelete,
-  onOpenResource,
   onDeleteResource,
 }) {
   const scheduled =
     module.publish_at &&
     new Date(module.publish_at) >
-      new Date();
+    new Date();
 
   const published =
     module.status === "published";
@@ -97,13 +97,12 @@ function ModuleCard({
             </span>
 
             <span
-              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                published
+              className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${published
                   ? scheduled
                     ? "bg-orange-100 text-orange-700"
                     : "bg-green-100 text-green-700"
                   : "bg-gray-100 text-gray-600"
-              }`}
+                }`}
             >
               {published ? (
                 <Eye className="h-3.5 w-3.5" />
@@ -133,12 +132,10 @@ function ModuleCard({
         <div className="flex shrink-0 gap-1">
           <button
             type="button"
-            onClick={() =>
-              onEdit(module)
-            }
+            onClick={() => onEdit(module)}
             disabled={saving}
-            className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50"
             aria-label={`Edit ${module.title}`}
+            className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50"
           >
             <Edit3 className="h-4 w-4" />
           </button>
@@ -149,8 +146,8 @@ function ModuleCard({
               onDelete(module)
             }
             disabled={saving}
-            className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
             aria-label={`Delete ${module.title}`}
+            className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -175,7 +172,8 @@ function ModuleCard({
           </h4>
 
           <span className="text-xs text-gray-400">
-            {module.resources?.length || 0}{" "}
+            {module.resources?.length ||
+              0}{" "}
             item
             {(module.resources?.length ||
               0) === 1
@@ -188,10 +186,7 @@ function ModuleCard({
           resources={
             module.resources || []
           }
-          onOpen={onOpenResource}
-          onDelete={
-            onDeleteResource
-          }
+          onDelete={onDeleteResource}
           deleting={saving}
         />
       </div>
@@ -216,25 +211,30 @@ export default function TeacherModulesTab({
     saveModule,
     deleteModule,
     deleteResource,
-    openResource,
   } = useLearningModules(
     classRecord?.id,
   );
 
-  const [periodFilter, setPeriodFilter] =
-    useState("");
+  const [
+    periodFilter,
+    setPeriodFilter,
+  ] = useState("");
 
   const [formOpen, setFormOpen] =
     useState(false);
 
-  const [selectedModule, setSelectedModule] =
-    useState(null);
+  const [
+    selectedModule,
+    setSelectedModule,
+  ] = useState(null);
 
   const [notice, setNotice] =
     useState("");
 
-  const [actionError, setActionError] =
-    useState("");
+  const [
+    actionError,
+    setActionError,
+  ] = useState("");
 
   const filteredModules = useMemo(
     () =>
@@ -288,7 +288,7 @@ export default function TeacherModulesTab({
     } catch (saveError) {
       setActionError(
         saveError.message ||
-          "Unable to save the module.",
+        "Unable to save the module.",
       );
     }
   }
@@ -345,12 +345,12 @@ export default function TeacherModulesTab({
             className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
           >
             <RefreshCw
-              className={`h-4 w-4 ${
-                loading
+              className={`h-4 w-4 ${loading
                   ? "animate-spin"
                   : ""
-              }`}
+                }`}
             />
+
             Refresh
           </button>
 
@@ -399,46 +399,33 @@ export default function TeacherModulesTab({
           </p>
         </div>
 
-        <div>
-          <label
-            htmlFor="module-period-filter"
-            className="sr-only"
-          >
-            Filter by grading period
-          </label>
-
-          <select
-            id="module-period-filter"
-            value={periodFilter}
-            onChange={(event) =>
-              setPeriodFilter(
-                event.target.value,
-              )
-            }
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-          >
-            {gradingPeriods.map(
-              (period) => (
-                <option
-                  key={
-                    period.value ||
-                    "all"
-                  }
-                  value={period.value}
-                >
-                  {period.label}
-                </option>
-              ),
-            )}
-          </select>
-        </div>
+        <select
+          value={periodFilter}
+          onChange={(event) =>
+            setPeriodFilter(
+              event.target.value,
+            )
+          }
+          aria-label="Filter by grading period"
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+        >
+          {gradingPeriods.map(
+            (period) => (
+              <option
+                key={
+                  period.value || "all"
+                }
+                value={period.value}
+              >
+                {period.label}
+              </option>
+            ),
+          )}
+        </select>
       </div>
 
       {loading && (
-        <div
-          role="status"
-          className="flex min-h-[280px] items-center justify-center rounded-xl border border-gray-100 bg-white"
-        >
+        <div className="flex min-h-[280px] items-center justify-center rounded-xl border border-gray-100 bg-white">
           <div className="text-center">
             <Loader2 className="mx-auto h-7 w-7 animate-spin text-blue-600" />
 
@@ -464,8 +451,7 @@ export default function TeacherModulesTab({
               <p className="mt-2 text-sm leading-6 text-gray-500">
                 Add lessons, instructions,
                 files, presentations, videos,
-                or external references for
-                your students.
+                or external references.
               </p>
 
               <button
@@ -514,9 +500,6 @@ export default function TeacherModulesTab({
                   saving={saving}
                   onEdit={openEditForm}
                   onDelete={handleDelete}
-                  onOpenResource={
-                    openResource
-                  }
                   onDeleteResource={
                     handleDeleteResource
                   }
@@ -536,9 +519,6 @@ export default function TeacherModulesTab({
           saving={saving}
           onClose={closeForm}
           onSave={handleSave}
-          onOpenResource={
-            openResource
-          }
         />
       )}
     </div>
