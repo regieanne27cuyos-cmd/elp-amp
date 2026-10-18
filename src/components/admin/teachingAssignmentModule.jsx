@@ -396,6 +396,20 @@ export default function TeachingAssignmentModule() {
     loadData();
   }, []);
 
+
+  const activeSchoolYear =
+    useMemo(() => {
+      return (
+        options.schoolYears.find(
+          (schoolYear) =>
+            schoolYear.status ===
+            "active",
+        ) ||
+        options.schoolYears[0] ||
+        null
+      );
+    }, [options.schoolYears]);
+
   const selectedSection = useMemo(
     () =>
       options.sections.find((section) => section.id === form.section_id) ||
@@ -500,6 +514,11 @@ export default function TeachingAssignmentModule() {
         [field]: value,
       };
 
+      if (field === "teacher_id") {
+        updatedForm.subject_ids = [];
+        updatedForm.subject_id = "";
+      }
+
       if (field === "school_year_id") {
         updatedForm.section_id = "";
 
@@ -519,25 +538,59 @@ export default function TeachingAssignmentModule() {
   }
 
   function toggleSubject(subjectId) {
+    const conflict =
+      findAssignmentConflict(subjectId);
+
+    if (conflict) {
+      setActionError(
+        getAssignmentConflictMessage(
+          conflict,
+        ),
+      );
+      return;
+    }
+
+    setActionError("");
+
     setForm((current) => {
-      const alreadySelected = current.subject_ids.includes(subjectId);
+      const alreadySelected =
+        current.subject_ids.includes(
+          subjectId,
+        );
 
       return {
         ...current,
 
         subject_ids: alreadySelected
-          ? current.subject_ids.filter((id) => id !== subjectId)
-          : [...current.subject_ids, subjectId],
+          ? current.subject_ids.filter(
+            (id) => id !== subjectId,
+          )
+          : [
+            ...current.subject_ids,
+            subjectId,
+          ],
       };
     });
   }
 
   function selectAllSubjects() {
+    const selectableSubjectIds =
+      availableSubjects
+        .filter(
+          (subject) =>
+            !findAssignmentConflict(
+              subject.id,
+            ),
+        )
+        .map((subject) => subject.id);
+
     setForm((current) => ({
       ...current,
-
-      subject_ids: availableSubjects.map((subject) => subject.id),
+      subject_ids:
+        selectableSubjectIds,
     }));
+
+    setActionError("");
   }
 
   function clearSubjects() {
@@ -548,17 +601,37 @@ export default function TeachingAssignmentModule() {
     }));
   }
 
-  function openAddModal() {
+  function openAddModal(
+    teacherId = "",
+  ) {
+    if (!activeSchoolYear) {
+      setPageError(
+        "There is no active school year. Check the dates in Academic Setup before creating a teaching assignment.",
+      );
+      return;
+    }
+
     setSelected(null);
 
     setForm({
       ...emptyForm,
 
+      teacher_id: teacherId,
+
+      school_year_id:
+        activeSchoolYear.id,
+
+      section_id: "",
+
       subject_ids: [],
+
+      subject_id: "",
+
+      status: "active",
     });
 
     setActionError("");
-
+    setPageError("");
     setModalMode("add");
   }
 
@@ -600,18 +673,90 @@ export default function TeachingAssignmentModule() {
     setActionError("");
   }
 
+  function findAssignmentConflict(
+    subjectId,
+    excludedAssignmentId = null,
+  ) {
+    return assignments.find(
+      (assignment) =>
+        assignment.id !==
+        excludedAssignmentId &&
+        assignment.subject_id ===
+        subjectId &&
+        assignment.section_id ===
+        form.section_id &&
+        assignment.school_year_id ===
+        form.school_year_id,
+    );
+  }
+
+  function getAssignmentConflictMessage(
+    conflict,
+  ) {
+    const teacherName =
+      conflict.teacher?.profile
+        ?.full_name ||
+      "Another teacher";
+
+    const subjectName =
+      conflict.subject?.subject_name ||
+      "This subject";
+
+    const sectionName =
+      conflict.section?.section_name ||
+      "the selected section";
+
+    return `${subjectName} is already assigned to ${teacherName} in ${sectionName}. Remove or edit the existing assignment first.`;
+  }
+
   function validateCommonFields() {
-    if (!form.teacher_id || !form.school_year_id || !form.section_id) {
-      throw new Error("Select a teacher, school year, and section.");
+    if (!form.teacher_id) {
+      throw new Error(
+        "Select a teacher.",
+      );
     }
 
-    const section = options.sections.find(
-      (item) => item.id === form.section_id,
-    );
-
-    if (section?.school_year_id !== form.school_year_id) {
+    if (!form.school_year_id) {
       throw new Error(
-        "The section does not belong to the selected school year.",
+        "There is no active school year. Configure the current school year in Academic Setup first.",
+      );
+    }
+
+    if (!form.section_id) {
+      throw new Error(
+        "Select a section.",
+      );
+    }
+
+    if (
+      modalMode === "add" &&
+      form.school_year_id !==
+      activeSchoolYear?.id
+    ) {
+      throw new Error(
+        "New teaching assignments can only be created for the active school year.",
+      );
+    }
+
+    const section =
+      options.sections.find(
+        (item) =>
+          item.id ===
+          form.section_id,
+      );
+
+    if (!section) {
+      throw new Error(
+        "The selected section could not be found.",
+      );
+    }
+
+    if (
+      section.school_year_id !==
+      form.school_year_id
+    ) {
+      throw new Error(
+        "The selected section does not belong to the active school year.",
       );
     }
   }
@@ -620,7 +765,6 @@ export default function TeachingAssignmentModule() {
     event.preventDefault();
 
     setSaving(true);
-
     setActionError("");
 
     try {
@@ -628,86 +772,153 @@ export default function TeachingAssignmentModule() {
 
       if (modalMode === "edit") {
         if (!selected?.id) {
-          throw new Error("No teaching assignment was selected.");
+          throw new Error(
+            "No teaching assignment was selected.",
+          );
         }
 
         if (!form.subject_id) {
-          throw new Error("Select a subject.");
+          throw new Error(
+            "Select a subject.",
+          );
         }
 
-        const { error } = await supabase
+        const conflict =
+          findAssignmentConflict(
+            form.subject_id,
+            selected.id,
+          );
 
-          .from("teaching_assignments")
+        if (conflict) {
+          throw new Error(
+            getAssignmentConflictMessage(
+              conflict,
+            ),
+          );
+        }
 
+        const {
+          error: updateError,
+        } = await supabase
+          .from(
+            "teaching_assignments",
+          )
           .update({
-            teacher_id: form.teacher_id,
+            teacher_id:
+              form.teacher_id,
 
-            subject_id: form.subject_id,
+            subject_id:
+              form.subject_id,
 
-            section_id: form.section_id,
+            section_id:
+              form.section_id,
 
-            school_year_id: form.school_year_id,
+            school_year_id:
+              form.school_year_id,
 
             status: form.status,
-          })
 
+            updated_at:
+              new Date().toISOString(),
+          })
           .eq("id", selected.id);
 
-        if (error) throw error;
+        if (updateError) {
+          throw updateError;
+        }
       } else {
-        if (form.subject_ids.length === 0) {
-          throw new Error("Select at least one subject.");
+        if (
+          form.subject_ids.length === 0
+        ) {
+          throw new Error(
+            "Select at least one subject.",
+          );
         }
 
-        const bulkAssignments = form.subject_ids.map((subjectId) => ({
-          teacher_id: form.teacher_id,
+        const conflictingAssignments =
+          form.subject_ids
+            .map((subjectId) =>
+              findAssignmentConflict(
+                subjectId,
+              ),
+            )
+            .filter(Boolean);
 
-          subject_id: subjectId,
+        if (
+          conflictingAssignments.length >
+          0
+        ) {
+          const conflict =
+            conflictingAssignments[0];
 
-          section_id: form.section_id,
+          throw new Error(
+            getAssignmentConflictMessage(
+              conflict,
+            ),
+          );
+        }
 
-          school_year_id: form.school_year_id,
+        const bulkAssignments =
+          form.subject_ids.map(
+            (subjectId) => ({
+              teacher_id:
+                form.teacher_id,
 
-          status: form.status,
-        }));
+              subject_id:
+                subjectId,
+
+              section_id:
+                form.section_id,
+
+              school_year_id:
+                form.school_year_id,
+
+              status: form.status,
+            }),
+          );
 
         /*
-
-         * Existing matching records are updated.
-
-         * New subject assignments are inserted.
-
+         * Use insert instead of upsert.
+         * An existing subject assignment
+         * must produce an error rather than
+         * silently changing the teacher.
          */
+        const {
+          error: insertError,
+        } = await supabase
+          .from(
+            "teaching_assignments",
+          )
+          .insert(bulkAssignments);
 
-        const { error } = await supabase
-
-          .from("teaching_assignments")
-
-          .upsert(bulkAssignments, {
-            onConflict: "teacher_id,subject_id,section_id",
-
-            ignoreDuplicates: false,
-          });
-
-        if (error) throw error;
+        if (insertError) {
+          throw insertError;
+        }
       }
 
       await loadData();
-
       closeModal();
-    } catch (error) {
+    } catch (saveError) {
       console.error(
         "Failed to save teaching assignments:",
-
-        error,
+        saveError,
       );
 
-      if (error.code === "23505") {
-        setActionError("One of these teaching assignments already exists.");
-      } else if (error.code === "23503") {
-        setActionError("One of the selected records no longer exists.");
+      if (saveError.code === "23505") {
+        setActionError(
+          "One or more selected subjects already have an assigned teacher in this section.",
+        );
+      } else if (
+        saveError.code === "23503"
+      ) {
+        setActionError(
+          "One of the selected teachers, subjects, sections, or school years no longer exists.",
+        );
       } else {
-        setActionError(error.message || "Unable to save teaching assignments.");
+        setActionError(
+          saveError.message ||
+          "Unable to save teaching assignments.",
+        );
       }
     } finally {
       setSaving(false);
@@ -761,7 +972,7 @@ export default function TeachingAssignmentModule() {
         title="Teaching Assignments"
         count={assignments.length}
         addLabel="Assign Subjects"
-        onAdd={openAddModal}
+        onAdd={() => openAddModal()}
       />
 
       <p className="-mt-3 mb-5 text-sm text-gray-500">
@@ -834,21 +1045,9 @@ export default function TeachingAssignmentModule() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setSelected(null);
-
-                    setForm({
-                      ...emptyForm,
-
-                      teacher_id: group.teacherId,
-
-                      subject_ids: [],
-                    });
-
-                    setActionError("");
-
-                    setModalMode("add");
-                  }}
+                  onClick={() =>
+                    openAddModal(group.teacherId)
+                  }
                   className="flex items-center justify-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100"
                 >
                   <BookOpen className="h-4 w-4" />
@@ -980,26 +1179,28 @@ export default function TeachingAssignmentModule() {
             </Field>
 
             <Field label="School year">
-              <select
-                className={inputClass}
-                value={form.school_year_id}
-                onChange={(event) =>
-                  updateField(
-                    "school_year_id",
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5">
+                <p
+                  className={`text-sm font-medium ${form.school_year_id
+                    ? "text-gray-700"
+                    : "text-red-500"
+                    }`}
+                >
+                  {modalMode === "edit"
+                    ? selected?.school_year
+                      ?.name ||
+                    activeSchoolYear?.name ||
+                    "School year unavailable"
+                    : activeSchoolYear?.name ||
+                    "No active school year"}
+                </p>
 
-                    event.target.value,
-                  )
-                }
-                required
-              >
-                <option value="">Select school year</option>
-
-                {options.schoolYears.map((schoolYear) => (
-                  <option key={schoolYear.id} value={schoolYear.id}>
-                    {schoolYear.name}
-                  </option>
-                ))}
-              </select>
+                <p className="mt-1 text-xs text-gray-400">
+                  {modalMode === "edit"
+                    ? "School year of this teaching assignment"
+                    : "Selected automatically from the active school year"}
+                </p>
+              </div>
             </Field>
 
             <Field label="Section">
@@ -1035,52 +1236,88 @@ export default function TeachingAssignmentModule() {
                 <select
                   className={inputClass}
                   value={form.subject_id}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     updateField(
                       "subject_id",
-
                       event.target.value,
-                    )
-                  }
+                    );
+
+                    setActionError("");
+                  }}
                   disabled={!form.section_id}
                   required
                 >
-                  <option value="">Select subject</option>
+                  <option value="">
+                    Select subject
+                  </option>
 
-                  {availableSubjects.map((subject) => (
-                    <option key={subject.id} value={subject.id}>
-                      {subject.subject_code}
+                  {availableSubjects.map(
+                    (subject) => {
+                      const conflict =
+                        findAssignmentConflict(
+                          subject.id,
+                          selected?.id || null,
+                        );
 
-                      {" — "}
+                      const assignedTeacher =
+                        conflict?.teacher?.profile
+                          ?.full_name ||
+                        "another teacher";
 
-                      {subject.subject_name}
-                    </option>
-                  ))}
+                      return (
+                        <option
+                          key={subject.id}
+                          value={subject.id}
+                          disabled={Boolean(conflict)}
+                        >
+                          {subject.subject_code}
+                          {" — "}
+                          {subject.subject_name}
+                          {conflict
+                            ? ` — Already assigned to ${assignedTeacher}`
+                            : ""}
+                        </option>
+                      );
+                    },
+                  )}
                 </select>
+
+                {!form.section_id && (
+                  <p className="mt-1.5 text-xs text-gray-400">
+                    Select a section first.
+                  </p>
+                )}
               </Field>
             ) : (
               <Field label="Subjects">
                 <div className="overflow-hidden rounded-xl border border-gray-200">
-                  <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 px-3 py-2">
                     <span className="text-xs text-gray-500">
-                      {form.subject_ids.length} selected
+                      {form.subject_ids.length}{" "}
+                      selected
                     </span>
 
                     <div className="flex gap-3">
                       <button
                         type="button"
                         onClick={selectAllSubjects}
-                        disabled={availableSubjects.length === 0}
-                        className="text-xs font-medium text-blue-600 hover:underline disabled:text-gray-300"
+                        disabled={
+                          availableSubjects.length ===
+                          0 || saving
+                        }
+                        className="text-xs font-medium text-blue-600 hover:underline disabled:cursor-not-allowed disabled:text-gray-300"
                       >
-                        Select all
+                        Select available
                       </button>
 
                       <button
                         type="button"
                         onClick={clearSubjects}
-                        disabled={form.subject_ids.length === 0}
-                        className="text-xs font-medium text-gray-500 hover:underline disabled:text-gray-300"
+                        disabled={
+                          form.subject_ids.length ===
+                          0 || saving
+                        }
+                        className="text-xs font-medium text-gray-500 hover:underline disabled:cursor-not-allowed disabled:text-gray-300"
                       >
                         Clear
                       </button>
@@ -1088,47 +1325,97 @@ export default function TeachingAssignmentModule() {
                   </div>
 
                   <div className="max-h-56 overflow-y-auto p-2">
-                    {availableSubjects.map((subject) => {
-                      const checked = form.subject_ids.includes(subject.id);
+                    {availableSubjects.map(
+                      (subject) => {
+                        const checked =
+                          form.subject_ids.includes(
+                            subject.id,
+                          );
 
-                      return (
-                        <label
-                          key={subject.id}
-                          className={`flex cursor-pointer items-start gap-3 rounded-lg px-3 py-2.5 ${checked ? "bg-blue-50" : "hover:bg-gray-50"
-                            }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleSubject(subject.id)}
-                            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600"
-                          />
+                        const existingAssignment =
+                          findAssignmentConflict(
+                            subject.id,
+                          );
 
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-gray-900">
-                              {subject.subject_name}
-                            </p>
+                        const assignedTeacherName =
+                          existingAssignment?.teacher
+                            ?.profile?.full_name ||
+                          "another teacher";
 
-                            <p className="text-xs text-gray-400">
-                              {subject.subject_code}
-                              {" · "}
-                              Grade {subject.grade_level}
-                            </p>
-                          </div>
+                        const unavailable =
+                          Boolean(
+                            existingAssignment,
+                          );
 
-                          {checked && (
-                            <CheckSquare className="ml-auto h-4 w-4 shrink-0 text-blue-600" />
-                          )}
-                        </label>
-                      );
-                    })}
+                        return (
+                          <label
+                            key={subject.id}
+                            className={`flex items-start gap-3 rounded-lg px-3 py-2.5 ${unavailable
+                              ? "cursor-not-allowed bg-gray-50 opacity-70"
+                              : checked
+                                ? "cursor-pointer bg-blue-50"
+                                : "cursor-pointer hover:bg-gray-50"
+                              }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() =>
+                                toggleSubject(
+                                  subject.id,
+                                )
+                              }
+                              disabled={
+                                unavailable || saving
+                              }
+                              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 disabled:cursor-not-allowed"
+                            />
 
-                    {form.section_id && availableSubjects.length === 0 && (
-                      <p className="px-3 py-6 text-center text-sm text-orange-600">
-                        No active subjects match this section&apos;s grade and
-                        strand.
-                      </p>
+                            <div className="min-w-0 flex-1">
+                              <p
+                                className={`text-sm font-medium ${unavailable
+                                  ? "text-gray-500"
+                                  : "text-gray-900"
+                                  }`}
+                              >
+                                {subject.subject_name}
+                              </p>
+
+                              <p className="text-xs text-gray-400">
+                                {subject.subject_code}
+                                {" · "}
+                                Grade{" "}
+                                {subject.grade_level}
+                              </p>
+
+                              {existingAssignment && (
+                                <p className="mt-1 text-xs font-medium text-orange-600">
+                                  Already assigned to{" "}
+                                  {
+                                    assignedTeacherName
+                                  }
+                                </p>
+                              )}
+                            </div>
+
+                            {checked &&
+                              !unavailable && (
+                                <CheckSquare className="ml-auto h-4 w-4 shrink-0 text-blue-600" />
+                              )}
+                          </label>
+                        );
+                      },
                     )}
+
+                    {form.section_id &&
+                      availableSubjects.length ===
+                      0 && (
+                        <p className="px-3 py-6 text-center text-sm text-orange-600">
+                          No active subjects match
+                          this section&apos;s grade
+                          and strand.
+                        </p>
+                      )}
 
                     {!form.section_id && (
                       <p className="px-3 py-6 text-center text-sm text-gray-400">
@@ -1163,7 +1450,7 @@ export default function TeachingAssignmentModule() {
                 type="button"
                 onClick={closeModal}
                 disabled={saving}
-                className="flex-1 rounded-lg bg-gray-100 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-200 disabled:opacity-60"
+                className="flex-1 rounded-lg bg-gray-100 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancel
               </button>
@@ -1172,7 +1459,13 @@ export default function TeachingAssignmentModule() {
                 type="submit"
                 disabled={
                   saving ||
-                  (modalMode === "add" && form.subject_ids.length === 0)
+                  !form.teacher_id ||
+                  !form.school_year_id ||
+                  !form.section_id ||
+                  (modalMode === "edit"
+                    ? !form.subject_id
+                    : form.subject_ids.length ===
+                    0)
                 }
                 className="flex-1 rounded-lg bg-slate-800 py-2.5 text-sm font-medium text-white hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
               >
@@ -1180,7 +1473,12 @@ export default function TeachingAssignmentModule() {
                   ? "Saving..."
                   : modalMode === "edit"
                     ? "Save Changes"
-                    : `Assign ${form.subject_ids.length || ""} Subject${form.subject_ids.length === 1 ? "" : "s"
+                    : `Assign ${form.subject_ids.length ||
+                    ""
+                    } Subject${form.subject_ids.length ===
+                      1
+                      ? ""
+                      : "s"
                     }`}
               </button>
             </div>

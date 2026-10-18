@@ -28,6 +28,8 @@ import StudentModule from "../components/admin/studentModule";
 import AnnouncementModule from "../components/admin/announcementModule";
 import TeachingAssignmentModule from "../components/admin/teachingAssignmentModule";
 import SectionRosterModule from "../components/admin/sectionRosterModule";
+import ArchivedStudentsModule from "../components/admin/archivedStudentsModule";
+import ArchivedTeachersModule from "../components/admin/archivedTeachersModule";
 
 import {
   Field,
@@ -807,11 +809,13 @@ export default function AdminDashboard() {
           created_at,
           updated_at,
           profile:profiles!teacher_details_id_fkey (
-            full_name,
-            email,
-            role,
-            status
-          )
+  full_name,
+  email,
+  role,
+  status,
+  archived_at,
+  archived_by
+)
         `)
           .order("created_at", { ascending: true });
 
@@ -839,11 +843,38 @@ export default function AdminDashboard() {
               email: profile?.email || "",
               role: profile?.role || "teacher",
               status: profile?.status || "inactive",
+
+              archived_at:
+                profile?.archived_at || null,
+
+              archived_by:
+                profile?.archived_by || null,
             };
           },
         );
 
-        setTeachers(formattedTeachers);
+        const activeTeachers =
+          formattedTeachers
+            .filter(
+              (teacher) =>
+                !teacher.archived_at,
+            )
+            .sort((first, second) =>
+              String(
+                first.full_name || "",
+              ).localeCompare(
+                String(
+                  second.full_name || "",
+                ),
+                undefined,
+                {
+                  sensitivity: "base",
+                },
+              ),
+            );
+
+        setTeachers(activeTeachers);
+
       } catch (error) {
         console.error("Failed to load teachers:", error);
 
@@ -879,113 +910,147 @@ export default function AdminDashboard() {
       setStudentsError("");
 
       try {
-        const { data, error } = await supabase
+        const {
+          data,
+          error: queryError,
+        } = await supabase
           .from("student_details")
           .select(`
+        id,
+        student_number,
+        first_name,
+        middle_name,
+        last_name,
+        suffix,
+        section_id,
+        contact_number,
+        created_at,
+        updated_at,
+        profile:profiles!student_details_id_fkey (
+  full_name,
+  email,
+  role,
+  status,
+  archived_at,
+  archived_by
+),
+        section:sections!student_details_section_id_fkey (
           id,
-          student_number,
-          first_name,
-          middle_name,
-          last_name,
-          section_id,
-          contact_number,
-          created_at,
-          updated_at,
-          profile:profiles!student_details_id_fkey (
-            full_name,
-            email,
-            role,
-            status
-          ),
-          section:sections!student_details_section_id_fkey (
+          section_name,
+          grade_level,
+          strand_id,
+          school_year_id,
+          status,
+          strand:strands (
             id,
-            section_name,
-            grade_level,
-            strand_id,
-            school_year_id,
-            status,
-            strand:strands (
-              id,
-              code,
-              name
-            ),
-            school_year:school_years (
-              id,
-              name
-            )
+            code,
+            name
+          ),
+          school_year:school_years (
+            id,
+            name
           )
-        `)
-          .order("created_at", {
+        )
+      `)
+          .order("last_name", {
+            ascending: true,
+          })
+          .order("first_name", {
             ascending: true,
           });
 
-        if (error) {
-          throw error;
+        if (queryError) {
+          throw queryError;
         }
 
         if (!active) return;
 
-        const formattedStudents = (data || []).map(
-          (student) => {
-            const profile = Array.isArray(
-              student.profile,
-            )
-              ? student.profile[0]
-              : student.profile;
+        const formattedStudents = (
+          data || []
+        ).map((student) => {
+          const profile = Array.isArray(
+            student.profile,
+          )
+            ? student.profile[0] || null
+            : student.profile || null;
 
-            const rawSection = Array.isArray(
-              student.section,
-            )
-              ? student.section[0]
-              : student.section;
+          const rawSection = Array.isArray(
+            student.section,
+          )
+            ? student.section[0] || null
+            : student.section || null;
 
-            const section = rawSection
-              ? {
-                ...rawSection,
-                strand: Array.isArray(
-                  rawSection.strand,
-                )
-                  ? rawSection.strand[0] || null
-                  : rawSection.strand || null,
+          const section = rawSection
+            ? {
+              ...rawSection,
 
-                school_year: Array.isArray(
-                  rawSection.school_year,
-                )
-                  ? rawSection.school_year[0] || null
-                  : rawSection.school_year || null,
-              }
-              : null;
+              strand: Array.isArray(
+                rawSection.strand,
+              )
+                ? rawSection.strand[0] ||
+                null
+                : rawSection.strand ||
+                null,
 
-            return {
-              ...student,
+              school_year: Array.isArray(
+                rawSection.school_year,
+              )
+                ? rawSection
+                  .school_year[0] ||
+                null
+                : rawSection.school_year ||
+                null,
+            }
+            : null;
 
-              first_name:
-                student.first_name,
+          return {
+            ...student,
 
-              middle_name:
-                student.middle_name,
+            first_name:
+              student.first_name || "",
 
-              last_name:
-                student.last_name,
+            middle_name:
+              student.middle_name || "",
 
-              full_name:
-                profile?.full_name || "",
+            last_name:
+              student.last_name || "",
 
-              email:
-                profile?.email || "",
+            suffix:
+              student.suffix || "",
 
-              role:
-                profile?.role || "student",
+            full_name:
+              profile?.full_name || "",
 
-              status:
-                profile?.status || "inactive",
+            email:
+              profile?.email || "",
 
-              section,
-            };
-          },
-        );
+            role:
+              profile?.role ||
+              "student",
 
-        setStudents(formattedStudents);
+            status:
+              profile?.status ||
+              "inactive",
+
+            archived_at:
+              profile?.archived_at ||
+              null,
+
+            archived_by:
+              profile?.archived_by ||
+              null,
+
+            section,
+          };
+        });
+
+        const activeStudents =
+          formattedStudents.filter(
+            (student) =>
+              !student.archived_at,
+          );
+
+        setStudents(activeStudents);
       } catch (loadError) {
         console.error(
           "Failed to load students:",
@@ -996,8 +1061,10 @@ export default function AdminDashboard() {
           setStudents([]);
 
           setStudentsError(
-            loadError.message ||
-            "Unable to load student accounts.",
+            loadError instanceof Error
+              ? loadError.message
+              : loadError?.message ||
+              "Unable to load student accounts.",
           );
         }
       } finally {
@@ -1014,9 +1081,6 @@ export default function AdminDashboard() {
     };
   }, [adminProfile]);
 
-
-
-  //use effect for announcement
   useEffect(() => {
     if (!adminProfile) return;
 
@@ -1262,8 +1326,8 @@ export default function AdminDashboard() {
                 type="button"
                 onClick={toggleNotifications}
                 className={`relative rounded-lg p-2 transition-colors ${notificationsOpen
-                    ? "bg-blue-50 text-blue-600"
-                    : "text-gray-500 hover:bg-gray-50"
+                  ? "bg-blue-50 text-blue-600"
+                  : "text-gray-500 hover:bg-gray-50"
                   }`}
                 aria-label="View notifications"
                 aria-expanded={notificationsOpen}
@@ -1355,8 +1419,8 @@ export default function AdminDashboard() {
                                   )
                                 }
                                 className={`flex w-full items-start gap-3 border-b border-gray-50 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 ${notification.read
-                                    ? "bg-white"
-                                    : "bg-blue-50/40"
+                                  ? "bg-white"
+                                  : "bg-blue-50/40"
                                   }`}
                               >
                                 <div
@@ -1502,9 +1566,40 @@ export default function AdminDashboard() {
               setTeachers={setTeachers}
               loading={teachersLoading}
               error={teachersError}
-              canDelete={canDelete}
+              canDelete={
+                adminProfile?.role ===
+                "super_admin"
+              }
+              onOpenArchivedTeachers={() =>
+                setActiveView(
+                  "archived-teachers",
+                )
+              }
             />
           )}
+
+          {activeView ===
+            "archived-teachers" && (
+              <>
+                {adminProfile?.role ===
+                  "super_admin" ? (
+                  <ArchivedTeachersModule
+                    adminProfile={adminProfile}
+                    onBack={() =>
+                      setActiveView("teachers")
+                    }
+                  />
+                ) : (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-red-100 bg-red-50 p-5 text-sm text-red-700"
+                  >
+                    Only a super administrator can
+                    view archived teachers.
+                  </div>
+                )}
+              </>
+            )}
 
           {activeView === "teaching_assignments" && (
             <TeachingAssignmentModule />
@@ -1516,9 +1611,40 @@ export default function AdminDashboard() {
               setStudents={setStudents}
               loading={studentsLoading}
               error={studentsError}
-              canDelete={canDelete}
+              canDelete={
+                adminProfile?.role ===
+                "super_admin"
+              }
+              onOpenArchivedStudents={() =>
+                setActiveView(
+                  "archived-students",
+                )
+              }
             />
           )}
+
+          {activeView ===
+            "archived-students" && (
+              <>
+                {adminProfile?.role ===
+                  "super_admin" ? (
+                  <ArchivedStudentsModule
+                    adminProfile={adminProfile}
+                    onBack={() =>
+                      setActiveView("students")
+                    }
+                  />
+                ) : (
+                  <div
+                    role="alert"
+                    className="rounded-xl border border-red-100 bg-red-50 p-5 text-sm text-red-700"
+                  >
+                    Only a super administrator can
+                    view archived students.
+                  </div>
+                )}
+              </>
+            )}
 
           {activeView === "announcements" && (
             <AnnouncementModule

@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, EyeOff, Plus, Search, Trash2 } from "lucide-react";
+import {
+  Archive,
+  Eye,
+  EyeOff,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
 import {
   Field,
   inputClass,
@@ -36,21 +43,82 @@ function generateEmailCode() {
   window.crypto.getRandomValues(randomValue);
   return String(randomValue[0] % 1_000_000).padStart(6, "0");
 }
+
+const suffixOptions = [
+  "",
+  "Jr.",
+  "Sr.",
+  "II",
+  "III",
+  "IV",
+  "V",
+];
+
+function sanitizeStudentName(value) {
+  return String(value || "")
+    .replace(/[^\p{L}\s]/gu, "")
+    .replace(/\s{2,}/g, " ");
+}
+
+function sanitizeContactNumber(value) {
+  return String(value || "")
+    .replace(/\D/g, "")
+    .slice(0, 11);
+}
+
+function isValidStudentName(value) {
+  const normalizedValue = String(
+    value || "",
+  ).trim();
+
+  return (
+    normalizedValue.length > 0 &&
+    /^[\p{L}]+(?:\s[\p{L}]+)*$/u.test(
+      normalizedValue,
+    )
+  );
+}
+
+function isValidOptionalMiddleName(value) {
+  const normalizedValue = String(
+    value || "",
+  ).trim();
+
+  return (
+    !normalizedValue ||
+    isValidStudentName(normalizedValue)
+  );
+}
+
+function isValidContactNumber(value) {
+  const normalizedValue = String(
+    value || "",
+  ).trim();
+
+  return (
+    !normalizedValue ||
+    /^09\d{9}$/.test(normalizedValue)
+  );
+}
+
 function createStudentRow() {
   return {
     first_name: "",
     middle_name: "",
     last_name: "",
+    suffix: "",
     email_code: generateEmailCode(),
     contact_number: "",
   };
 }
+
 function normalizeLastName(value) {
   return String(value || "")
     .trim()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+
     .replace(/[^a-z0-9]/g, "");
 }
 function buildStudentEmail(lastName, emailCode) {
@@ -58,9 +126,17 @@ function buildStudentEmail(lastName, emailCode) {
   if (!normalizedLastName) return "";
   return `${normalizedLastName}.${emailCode}@ejist.edu.ph`;
 }
+
 function buildFullName(student) {
-  return [student.first_name, student.middle_name, student.last_name]
-    .map((name) => String(name || "").trim())
+  return [
+    student.first_name,
+    student.middle_name,
+    student.last_name,
+    student.suffix,
+  ]
+    .map((name) =>
+      String(name || "").trim(),
+    )
     .filter(Boolean)
     .join(" ");
 }
@@ -84,6 +160,10 @@ function formatStudentDisplayName(student) {
     student?.last_name || "",
   ).trim();
 
+  const suffix = String(
+    student?.suffix || "",
+  ).trim();
+
   const givenNames = [
     firstName,
     middleName,
@@ -92,16 +172,16 @@ function formatStudentDisplayName(student) {
     .join(" ");
 
   if (lastName && givenNames) {
-    return `${lastName}, ${givenNames}`;
+    return `${lastName}, ${givenNames}${suffix ? ` ${suffix}` : ""
+      }`;
   }
 
   return (
-    lastName ||
-    givenNames ||
-    "Unnamed student"
+    [lastName, givenNames, suffix]
+      .filter(Boolean)
+      .join(" ") || "Unnamed student"
   );
 }
-
 
 function StudentForm({
   initialData,
@@ -112,90 +192,285 @@ function StudentForm({
   saving,
 }) {
   const [form, setForm] = useState({
-    student_number: initialData?.student_number || "",
-    full_name: initialData?.full_name || "",
+    student_number:
+      initialData?.student_number || "",
+    first_name:
+      initialData?.first_name || "",
+    middle_name:
+      initialData?.middle_name || "",
+    last_name:
+      initialData?.last_name || "",
+    suffix: initialData?.suffix || "",
     email: initialData?.email || "",
     password: "",
-    section_id: initialData?.section_id || "",
-    contact_number: initialData?.contact_number || "",
-    status: initialData?.status || "active",
+    section_id:
+      initialData?.section_id || "",
+    contact_number:
+      initialData?.contact_number || "",
+    status:
+      initialData?.status || "active",
   });
+
+  const [formError, setFormError] =
+    useState("");
+
   function update(field, value) {
+    let updatedValue = value;
+
+    if (
+      [
+        "first_name",
+        "middle_name",
+        "last_name",
+      ].includes(field)
+    ) {
+      updatedValue =
+        sanitizeStudentName(value);
+    }
+
+    if (field === "contact_number") {
+      updatedValue =
+        sanitizeContactNumber(value);
+    }
+
     setForm((current) => ({
       ...current,
-      [field]: value,
+      [field]: updatedValue,
     }));
+
+    setFormError("");
   }
+
   function handleSubmit(event) {
     event.preventDefault();
+    setFormError("");
+
+    if (!form.student_number.trim()) {
+      setFormError(
+        "Student number is required.",
+      );
+      return;
+    }
+
     if (
-      !form.student_number.trim() ||
-      !form.full_name.trim() ||
-      !form.email.trim()
+      !isValidStudentName(form.first_name)
     ) {
-      window.alert("Please complete all required fields.");
+      setFormError(
+        "First name is required and may only contain letters and spaces.",
+      );
       return;
     }
-    if (form.password && form.password.length < 8) {
-      window.alert("The new password must contain at least 8 characters.");
+
+    if (
+      !isValidOptionalMiddleName(
+        form.middle_name,
+      )
+    ) {
+      setFormError(
+        "Middle name may only contain letters and spaces.",
+      );
       return;
     }
+
+    if (
+      !isValidStudentName(form.last_name)
+    ) {
+      setFormError(
+        "Last name is required and may only contain letters and spaces.",
+      );
+      return;
+    }
+
+    if (
+      form.suffix &&
+      !suffixOptions.includes(form.suffix)
+    ) {
+      setFormError(
+        "Please select a valid suffix.",
+      );
+      return;
+    }
+
+    if (!form.email.trim()) {
+      setFormError("Email is required.");
+      return;
+    }
+
+    if (
+      !isValidContactNumber(
+        form.contact_number,
+      )
+    ) {
+      setFormError(
+        "Contact number must contain exactly 11 digits and begin with 09.",
+      );
+      return;
+    }
+
+    if (
+      form.password &&
+      form.password.length < 8
+    ) {
+      setFormError(
+        "The new password must contain at least 8 characters.",
+      );
+      return;
+    }
+
+    const normalizedStudent = {
+      first_name: form.first_name.trim(),
+      middle_name:
+        form.middle_name.trim() || null,
+      last_name: form.last_name.trim(),
+      suffix: form.suffix || null,
+    };
+
     onSave({
       ...form,
-      student_number: form.student_number.trim(),
-      full_name: form.full_name.trim(),
-      email: form.email.trim().toLowerCase(),
-      section_id: form.section_id || null,
+      ...normalizedStudent,
+      full_name: buildFullName(
+        normalizedStudent,
+      ),
+      student_number:
+        form.student_number.trim(),
+      email: form.email
+        .trim()
+        .toLowerCase(),
+      section_id:
+        form.section_id || null,
       contact_number:
-        form.contact_number.trim() || null,
+        form.contact_number.trim() ||
+        null,
     });
   }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form
+      onSubmit={handleSubmit}
+      className="space-y-4"
+    >
+      {formError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600"
+        >
+          {formError}
+        </div>
+      )}
+
       <Field label="Student number">
         <input
           className={inputClass}
           value={form.student_number}
-          onChange={(event) => update("student_number", event.target.value)}
-          placeholder="S-2026-001"
-          required
+          readOnly
+          disabled
         />
       </Field>
-      <Field label="Full name">
-        <input
-          className={inputClass}
-          value={form.full_name}
-          onChange={(event) => update("full_name", event.target.value)}
-          placeholder="Juan Dela Cruz"
-          required
-        />
-      </Field>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="First name">
+          <input
+            className={inputClass}
+            value={form.first_name}
+            onChange={(event) =>
+              update(
+                "first_name",
+                event.target.value,
+              )
+            }
+            placeholder="Juan"
+            maxLength={50}
+            required
+          />
+        </Field>
+
+        <Field label="Middle name">
+          <input
+            className={inputClass}
+            value={form.middle_name}
+            onChange={(event) =>
+              update(
+                "middle_name",
+                event.target.value,
+              )
+            }
+            placeholder="Santos"
+            maxLength={50}
+          />
+        </Field>
+
+        <Field label="Last name">
+          <input
+            className={inputClass}
+            value={form.last_name}
+            onChange={(event) =>
+              update(
+                "last_name",
+                event.target.value,
+              )
+            }
+            placeholder="Dela Cruz"
+            maxLength={50}
+            required
+          />
+        </Field>
+
+        <Field label="Suffix">
+          <select
+            className={inputClass}
+            value={form.suffix}
+            onChange={(event) =>
+              update(
+                "suffix",
+                event.target.value,
+              )
+            }
+          >
+            <option value="">No suffix</option>
+            <option value="Jr.">Jr.</option>
+            <option value="Sr.">Sr.</option>
+            <option value="II">II</option>
+            <option value="III">III</option>
+            <option value="IV">IV</option>
+            <option value="V">V</option>
+          </select>
+        </Field>
+      </div>
+
       <Field label="Email">
         <input
-          className={inputClass}
+          className={`${inputClass} cursor-default bg-gray-100`}
           type="email"
           value={form.email}
-          onChange={(event) => update("email", event.target.value)}
-          placeholder="student@ejist.edu.ph"
-          required
+          readOnly
         />
       </Field>
+
       <Field label="New temporary password (optional)">
         <input
           className={inputClass}
           type="password"
           value={form.password}
-          onChange={(event) => update("password", event.target.value)}
+          onChange={(event) =>
+            update(
+              "password",
+              event.target.value,
+            )
+          }
           placeholder="Leave blank to keep current password"
-          minLength={form.password ? 8 : undefined}
+          minLength={8}
         />
       </Field>
+
       <Field label="Section (optional)">
         <select
           className={inputClass}
           value={form.section_id || ""}
           onChange={(event) =>
-            update("section_id", event.target.value)
+            update(
+              "section_id",
+              event.target.value,
+            )
           }
           disabled={sectionsLoading}
         >
@@ -204,6 +479,7 @@ function StudentForm({
               ? "Loading sections..."
               : "Unassigned — assign later"}
           </option>
+
           {sections.map((section) => (
             <option
               key={section.id}
@@ -213,30 +489,62 @@ function StudentForm({
             </option>
           ))}
         </select>
+
         <p className="mt-1.5 text-xs text-gray-400">
-          The student can be assigned to a section later
-          through Section Rosters.
+          The student can be assigned to a
+          section later through Section
+          Rosters.
         </p>
       </Field>
+
       <Field label="Contact number">
         <input
           className={inputClass}
           type="tel"
+          inputMode="numeric"
           value={form.contact_number}
-          onChange={(event) => update("contact_number", event.target.value)}
-          placeholder="0917 000 0000"
+          onChange={(event) =>
+            update(
+              "contact_number",
+              event.target.value,
+            )
+          }
+          placeholder="09XXXXXXXXX"
+          minLength={
+            form.contact_number ? 11 : undefined
+          }
+          maxLength={11}
+          pattern="09[0-9]{9}"
+          title="Enter exactly 11 digits beginning with 09."
         />
+
+        <p className="mt-1 text-xs text-gray-400">
+          Optional. Enter exactly 11 digits
+          beginning with 09.
+        </p>
       </Field>
+
       <Field label="Account status">
         <select
           className={inputClass}
           value={form.status}
-          onChange={(event) => update("status", event.target.value)}
+          onChange={(event) =>
+            update(
+              "status",
+              event.target.value,
+            )
+          }
         >
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
+          <option value="active">
+            Active
+          </option>
+
+          <option value="inactive">
+            Inactive
+          </option>
         </select>
       </Field>
+
       <div className="flex gap-3 pt-2">
         <button
           type="button"
@@ -246,17 +554,23 @@ function StudentForm({
         >
           Cancel
         </button>
+
         <button
           type="submit"
-          disabled={saving || sectionsLoading}
+          disabled={
+            saving || sectionsLoading
+          }
           className="flex-1 rounded-lg bg-slate-800 py-2.5 text-sm font-medium text-white hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {saving ? "Saving..." : "Save Changes"}
+          {saving
+            ? "Saving..."
+            : "Save Changes"}
         </button>
       </div>
     </form>
   );
 }
+
 function getNextStudentNumber(
   existingStudents,
   rowIndex = 0,
@@ -293,18 +607,40 @@ function BulkStudentForm({
     createStudentRow(),
   ]);
   const [formError, setFormError] = useState("");
+
   function updateRow(index, field, value) {
+    let updatedValue = value;
+
+    if (
+      [
+        "first_name",
+        "middle_name",
+        "last_name",
+      ].includes(field)
+    ) {
+      updatedValue =
+        sanitizeStudentName(value);
+    }
+
+    if (field === "contact_number") {
+      updatedValue =
+        sanitizeContactNumber(value);
+    }
+
     setRows((currentRows) =>
       currentRows.map((row, rowIndex) =>
         rowIndex === index
           ? {
             ...row,
-            [field]: value,
+            [field]: updatedValue,
           }
           : row,
       ),
     );
+
+    setFormError("");
   }
+
   function addRow() {
     if (rows.length >= 50) {
       setFormError("You can add a maximum of 50 students per batch.");
@@ -321,6 +657,7 @@ function BulkStudentForm({
       return currentRows.filter((_, rowIndex) => rowIndex !== index);
     });
   }
+
   function handleSubmit(event) {
     event.preventDefault();
     setFormError("");
@@ -330,15 +667,71 @@ function BulkStudentForm({
       );
       return;
     }
-    const incompleteRowIndex = rows.findIndex(
-      (row) => !row.first_name.trim() || !row.last_name.trim(),
-    );
-    if (incompleteRowIndex !== -1) {
+
+    const invalidFirstNameIndex =
+      rows.findIndex(
+        (row) =>
+          !isValidStudentName(
+            row.first_name,
+          ),
+      );
+
+    if (invalidFirstNameIndex !== -1) {
       setFormError(
-        `Student ${incompleteRowIndex + 1} must have a first name and last name.`,
+        `Student ${invalidFirstNameIndex + 1
+        } must have a valid first name containing only letters and spaces.`,
       );
       return;
     }
+
+    const invalidMiddleNameIndex =
+      rows.findIndex(
+        (row) =>
+          !isValidOptionalMiddleName(
+            row.middle_name,
+          ),
+      );
+
+    if (invalidMiddleNameIndex !== -1) {
+      setFormError(
+        `Student ${invalidMiddleNameIndex + 1
+        } has an invalid middle name. Only letters and spaces are allowed.`,
+      );
+      return;
+    }
+
+    const invalidLastNameIndex =
+      rows.findIndex(
+        (row) =>
+          !isValidStudentName(
+            row.last_name,
+          ),
+      );
+
+    if (invalidLastNameIndex !== -1) {
+      setFormError(
+        `Student ${invalidLastNameIndex + 1
+        } must have a valid last name containing only letters and spaces.`,
+      );
+      return;
+    }
+
+    const invalidContactIndex =
+      rows.findIndex(
+        (row) =>
+          !isValidContactNumber(
+            row.contact_number,
+          ),
+      );
+
+    if (invalidContactIndex !== -1) {
+      setFormError(
+        `Student ${invalidContactIndex + 1
+        } must have an 11-digit contact number beginning with 09.`,
+      );
+      return;
+    }
+
     const students = rows.map((row, index) => ({
       student_number: getNextStudentNumber(
         existingStudents,
@@ -348,6 +741,7 @@ function BulkStudentForm({
       first_name: row.first_name.trim(),
       middle_name: row.middle_name.trim() || null,
       last_name: row.last_name.trim(),
+      suffix: row.suffix || null,
       email: buildStudentEmail(
         row.last_name,
         row.email_code,
@@ -566,6 +960,33 @@ function BulkStudentForm({
                       required
                     />
                   </div>
+
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-600">
+                      Suffix
+                    </label>
+
+                    <select
+                      className={inputClass}
+                      value={row.suffix}
+                      onChange={(event) =>
+                        updateRow(
+                          index,
+                          "suffix",
+                          event.target.value,
+                        )
+                      }
+                    >
+                      <option value="">No suffix</option>
+                      <option value="Jr.">Jr.</option>
+                      <option value="Sr.">Sr.</option>
+                      <option value="II">II</option>
+                      <option value="III">III</option>
+                      <option value="IV">IV</option>
+                      <option value="V">V</option>
+                    </select>
+                  </div>
+
                   <div className="sm:col-span-2">
                     <div className="mb-1 flex items-center justify-between gap-3">
                       <label className="block text-xs font-medium text-gray-600">
@@ -588,6 +1009,7 @@ function BulkStudentForm({
                     <input
                       className={inputClass}
                       type="tel"
+                      inputMode="numeric"
                       value={row.contact_number}
                       onChange={(event) =>
                         updateRow(
@@ -596,8 +1018,18 @@ function BulkStudentForm({
                           event.target.value,
                         )
                       }
-                      placeholder="0917 000 0000"
+                      placeholder="09XXXXXXXXX"
+                      minLength={
+                        row.contact_number ? 11 : undefined
+                      }
+                      maxLength={11}
+                      pattern="09[0-9]{9}"
+                      title="Enter exactly 11 digits beginning with 09."
                     />
+                    <p className="mt-1 text-xs text-gray-400">
+                      Optional. Exactly 11 digits beginning
+                      with 09.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -627,12 +1059,14 @@ function BulkStudentForm({
     </form>
   );
 }
+
 export default function StudentModule({
   students,
   setStudents,
   loading,
   error,
   canDelete = false,
+  onOpenArchivedStudents,
 }) {
   const [modalMode, setModalMode] =
     useState(null);
@@ -734,10 +1168,8 @@ export default function StudentModule({
       active = false;
     };
   }, []);
-  /*
-   * Remove IDs from the selection when their
-   * student accounts no longer exist.
-   */
+
+
   useEffect(() => {
     const validIds = new Set(
       students.map((student) => student.id),
@@ -898,57 +1330,59 @@ export default function StudentModule({
       setSaving(false);
     }
   }
-  async function handleDelete(student) {
 
+  async function handleArchive(student) {
     if (!canDelete) {
       setActionError(
-        "Only a super administrator can delete student accounts.",
+        "Only a super administrator can archive student accounts.",
       );
       return;
     }
 
-    const confirmed =
-      window.confirm(
-        `Permanently delete student "${student.full_name}"?\n\nThis will also delete the student's login account and cannot be undone.`,
-      );
+    const confirmed = window.confirm(
+      `Archive student "${student.full_name}"?\n\nThe student will no longer be able to sign in, but attendance, grades, submissions, and other records will be preserved.`,
+    );
 
     if (!confirmed) return;
 
     setActionError("");
     setNotice("");
+
     try {
       await callStudentFunction({
-        action: "delete",
+        action: "archive",
         id: student.id,
       });
+
       setStudents((currentStudents) =>
         currentStudents.filter(
           (currentStudent) =>
-            currentStudent.id !==
-            student.id,
+            currentStudent.id !== student.id,
         ),
       );
-      setSelectedStudentIds(
-        (current) =>
-          current.filter(
-            (id) =>
-              id !== student.id,
-          ),
+
+      setSelectedStudentIds((current) =>
+        current.filter(
+          (id) => id !== student.id,
+        ),
       );
+
       setNotice(
-        "Student deleted successfully.",
+        "Student account archived successfully.",
       );
-    } catch (deleteError) {
+    } catch (archiveError) {
       console.error(
-        "Student deletion failed:",
-        deleteError,
+        "Student archive failed:",
+        archiveError,
       );
+
       setActionError(
-        deleteError.message ||
-        "Unable to delete the student.",
+        archiveError.message ||
+        "Unable to archive the student.",
       );
     }
   }
+
   const filteredStudents =
     useMemo(() => {
       const query =
@@ -1110,100 +1544,99 @@ export default function StudentModule({
   function clearStudentSelection() {
     setSelectedStudentIds([]);
   }
-  async function handleBulkDelete() {
 
+  async function handleBulkArchive() {
     if (!canDelete) {
       setActionError(
-        "Only a super administrator can delete student accounts.",
+        "Only a super administrator can archive student accounts.",
       );
       return;
     }
 
-    if (
-      selectedStudentIds.length === 0
-    ) {
+    if (selectedStudentIds.length === 0) {
       return;
     }
+
     const selectedStudents =
       students.filter((student) =>
         selectedStudentIds.includes(
           student.id,
         ),
       );
-    const confirmed =
-      window.confirm(
-        `Permanently delete ${selectedStudents.length
-        } selected student${selectedStudents.length === 1
-          ? ""
-          : "s"
-        }?\n\nThis will also delete their login accounts and cannot be undone.`,
-      );
+
+    const confirmed = window.confirm(
+      `Archive ${selectedStudents.length} selected student${selectedStudents.length === 1
+        ? ""
+        : "s"
+      }?\n\nTheir login accounts will be disabled, but their school records will be preserved.`,
+    );
+
     if (!confirmed) return;
+
     setBulkDeleting(true);
     setActionError("");
     setNotice("");
-    const deletedIds = [];
+
+    const archivedIds = [];
     const failedStudents = [];
+
     /*
-     * Delete sequentially so the Edge Function
-     * is not overloaded.
+     * Process students sequentially to avoid
+     * overloading the Edge Function.
      */
-    for (
-      const student of
-      selectedStudents
-    ) {
+    for (const student of selectedStudents) {
       try {
         await callStudentFunction({
-          action: "delete",
+          action: "archive",
           id: student.id,
         });
-        deletedIds.push(
-          student.id,
-        );
-      } catch (deleteError) {
+
+        archivedIds.push(student.id);
+      } catch (archiveError) {
         console.error(
-          `Failed to delete ${student.full_name}:`,
-          deleteError,
+          `Failed to archive ${student.full_name}:`,
+          archiveError,
         );
+
         failedStudents.push({
           student,
           message:
-            deleteError.message ||
-            "Unable to delete this student.",
+            archiveError.message ||
+            "Unable to archive this student.",
         });
       }
     }
-    if (deletedIds.length > 0) {
-      setStudents(
-        (currentStudents) =>
-          currentStudents.filter(
-            (student) =>
-              !deletedIds.includes(
-                student.id,
-              ),
-          ),
+
+    if (archivedIds.length > 0) {
+      setStudents((currentStudents) =>
+        currentStudents.filter(
+          (student) =>
+            !archivedIds.includes(
+              student.id,
+            ),
+        ),
       );
+
       setNotice(
-        `${deletedIds.length} student${deletedIds.length === 1
+        `${archivedIds.length} student${archivedIds.length === 1
           ? ""
           : "s"
-        } deleted successfully.`,
+        } archived successfully.`,
       );
     }
+
     setSelectedStudentIds(
       failedStudents.map(
-        ({ student }) =>
-          student.id,
+        ({ student }) => student.id,
       ),
     );
-    if (
-      failedStudents.length > 0
-    ) {
+
+    if (failedStudents.length > 0) {
       setActionError(
         `${failedStudents.length} student${failedStudents.length === 1
           ? ""
           : "s"
-        } could not be deleted: ${failedStudents
+        } could not be archived: ${failedStudents
           .map(
             ({ student }) =>
               student.full_name,
@@ -1211,8 +1644,10 @@ export default function StudentModule({
           .join(", ")}.`,
       );
     }
+
     setBulkDeleting(false);
   }
+
   return (
     <div>
       <SectionHeader
@@ -1221,6 +1656,22 @@ export default function StudentModule({
         addLabel="Add Students"
         onAdd={openBulkAddModal}
       />
+
+      {canDelete &&
+        onOpenArchivedStudents && (
+          <div className="-mt-3 mb-5 flex justify-end">
+            <button
+              type="button"
+              onClick={
+                onOpenArchivedStudents
+              }
+              className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100"
+            >
+              <Archive className="h-4 w-4" />
+              Archived Students
+            </button>
+          </div>
+        )}
       <div className="mb-5 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(300px,1fr)_260px_180px_auto]">
           <div className="relative">
@@ -1310,7 +1761,7 @@ export default function StudentModule({
               className={inputClass}
             >
               <option value="">
-                All statuses
+                All status
               </option>
               <option value="active">
                 Active
@@ -1364,8 +1815,8 @@ export default function StudentModule({
               selected
             </p>
             <p className="text-xs text-blue-600">
-              Delete all selected student
-              accounts at once.
+              Archive all selected student accounts.
+              Their school records will be preserved.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1381,16 +1832,15 @@ export default function StudentModule({
             </button>
             <button
               type="button"
-              onClick={
-                handleBulkDelete
-              }
+              onClick={handleBulkArchive}
               disabled={bulkDeleting}
-              className="flex items-center gap-2 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Trash2 className="h-4 w-4" />
+              <Archive className="h-4 w-4" />
+
               {bulkDeleting
-                ? "Deleting..."
-                : "Delete Selected"}
+                ? "Archiving..."
+                : "Archive Selected"}
             </button>
           </div>
         </div>
@@ -1536,14 +1986,28 @@ export default function StudentModule({
                         />
                       </td>
                       <td className="px-5 py-3.5">
-                        <RowActions
-                          onEdit={() => openEditModal(student)}
-                          onDelete={
-                            canDelete
-                              ? () => handleDelete(student)
-                              : undefined
-                          }
-                        />
+                        <div className="flex justify-end gap-1">
+                          <RowActions
+                            onEdit={() =>
+                              openEditModal(student)
+                            }
+                          />
+
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleArchive(student)
+                              }
+                              disabled={saving || bulkDeleting}
+                              aria-label={`Archive ${student.full_name}`}
+                              title="Archive student"
+                              className="rounded-lg p-2 text-amber-600 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Archive className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

@@ -1,6 +1,10 @@
 import React, { useState } from "react";
 
-import { Eye, EyeOff } from "lucide-react";
+import {
+  Archive,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 import { supabase } from "../../lib/supabase";
 
@@ -12,6 +16,56 @@ import {
   SectionHeader,
   StatusBadge,
 } from "./adminUI";
+
+const teacherSuffixes = [
+  "",
+  "Jr.",
+  "Sr.",
+  "II",
+  "III",
+  "IV",
+  "V",
+];
+
+function sanitizeTeacherName(value) {
+  return String(value || "")
+    .replace(/[^\p{L}\s]/gu, "")
+    .replace(/\s{2,}/g, " ");
+}
+
+function isValidTeacherName(
+  value,
+  required = true,
+) {
+  const normalizedValue = String(
+    value || "",
+  ).trim();
+
+  if (!normalizedValue) {
+    return !required;
+  }
+
+  return /^[\p{L}]+(?:\s[\p{L}]+)*$/u.test(
+    normalizedValue,
+  );
+}
+
+function sanitizeContactNumber(value) {
+  return String(value || "")
+    .replace(/\D/g, "")
+    .slice(0, 11);
+}
+
+function isValidContactNumber(value) {
+  const normalizedValue = String(
+    value || "",
+  ).trim();
+
+  return (
+    !normalizedValue ||
+    /^09\d{9}$/.test(normalizedValue)
+  );
+}
 
 function getNextTeacherNumber(teachers) {
   const highestNumber = teachers.reduce((highest, teacher) => {
@@ -78,11 +132,26 @@ function splitTeacherName(fullName) {
     .filter(Boolean);
 
   let title = "";
+  let suffix = "";
 
   if (
-    ["Mr.", "Mrs.", "Ms."].includes(parts[0])
+    ["Mr.", "Mrs.", "Ms."].includes(
+      parts[0],
+    )
   ) {
     title = parts.shift();
+  }
+
+  const possibleSuffix =
+    parts[parts.length - 1];
+
+  if (
+    teacherSuffixes.includes(
+      possibleSuffix,
+    ) &&
+    possibleSuffix
+  ) {
+    suffix = parts.pop();
   }
 
   if (parts.length === 0) {
@@ -91,6 +160,7 @@ function splitTeacherName(fullName) {
       first_name: "",
       middle_name: "",
       last_name: "",
+      suffix,
     };
   }
 
@@ -100,16 +170,23 @@ function splitTeacherName(fullName) {
       first_name: parts[0],
       middle_name: "",
       last_name: "",
+      suffix,
     };
   }
 
   return {
     title,
+
     first_name: parts[0],
+
     middle_name: parts
       .slice(1, -1)
       .join(" "),
-    last_name: parts[parts.length - 1],
+
+    last_name:
+      parts[parts.length - 1],
+
+    suffix,
   };
 }
 
@@ -119,6 +196,7 @@ function buildTeacherFullName(form) {
     form.first_name,
     form.middle_name,
     form.last_name,
+    form.suffix,
   ]
     .map((value) =>
       String(value || "").trim(),
@@ -165,6 +243,9 @@ function TeacherForm({
     last_name:
       existingName.last_name || "",
 
+    suffix:
+      existingName.suffix || "",
+
     email:
       initialData?.email ||
       generateTeacherEmail(
@@ -186,10 +267,28 @@ function TeacherForm({
   }));
 
   function update(field, value) {
+    let updatedValue = value;
+
+    if (
+      [
+        "first_name",
+        "middle_name",
+        "last_name",
+      ].includes(field)
+    ) {
+      updatedValue =
+        sanitizeTeacherName(value);
+    }
+
+    if (field === "contact_number") {
+      updatedValue =
+        sanitizeContactNumber(value);
+    }
+
     setForm((current) => {
       const updatedForm = {
         ...current,
-        [field]: value,
+        [field]: updatedValue,
       };
 
       if (
@@ -198,7 +297,7 @@ function TeacherForm({
       ) {
         updatedForm.email =
           generateTeacherEmail(
-            value,
+            updatedValue,
             emailNumber,
           );
       }
@@ -219,27 +318,97 @@ function TeacherForm({
     const lastName =
       form.last_name.trim();
 
-    const fullName = buildTeacherFullName({
-      ...form,
-      first_name: firstName,
-      middle_name: middleName,
-      last_name: lastName,
-    });
+    const contactNumber =
+      form.contact_number.trim();
+
+    if (!form.teacher_number.trim()) {
+      window.alert(
+        "Teacher number is required.",
+      );
+      return;
+    }
+
+    if (!form.title) {
+      window.alert(
+        "Please select a title.",
+      );
+      return;
+    }
+
+    if (
+      !isValidTeacherName(
+        firstName,
+        true,
+      )
+    ) {
+      window.alert(
+        "First name is required and may only contain letters and spaces.",
+      );
+      return;
+    }
+
+    if (
+      !isValidTeacherName(
+        middleName,
+        false,
+      )
+    ) {
+      window.alert(
+        "Middle name may only contain letters and spaces.",
+      );
+      return;
+    }
+
+    if (
+      !isValidTeacherName(
+        lastName,
+        true,
+      )
+    ) {
+      window.alert(
+        "Last name is required and may only contain letters and spaces.",
+      );
+      return;
+    }
+
+    if (
+      form.suffix &&
+      !teacherSuffixes.includes(
+        form.suffix,
+      )
+    ) {
+      window.alert(
+        "Please select a valid suffix.",
+      );
+      return;
+    }
+
+    if (
+      !isValidContactNumber(
+        contactNumber,
+      )
+    ) {
+      window.alert(
+        "Contact number must contain exactly 11 digits and begin with 09.",
+      );
+      return;
+    }
+
+    const fullName =
+      buildTeacherFullName({
+        ...form,
+        first_name: firstName,
+        middle_name: middleName,
+        last_name: lastName,
+      });
 
     const normalizedEmail =
       form.email.trim().toLowerCase();
 
-    if (
-      !form.teacher_number.trim() ||
-      !form.title ||
-      !firstName ||
-      !lastName ||
-      !normalizedEmail
-    ) {
+    if (!normalizedEmail) {
       window.alert(
-        "Teacher number, title, first name, last name, and email are required.",
+        "School email is required.",
       );
-
       return;
     }
 
@@ -250,7 +419,6 @@ function TeacherForm({
       window.alert(
         "The temporary password must contain at least 8 characters.",
       );
-
       return;
     }
 
@@ -262,7 +430,6 @@ function TeacherForm({
       window.alert(
         "The new password must contain at least 8 characters.",
       );
-
       return;
     }
 
@@ -270,8 +437,6 @@ function TeacherForm({
       teacher_number:
         form.teacher_number.trim(),
 
-      // These fields are combined because your
-      // current database uses full_name.
       full_name: fullName,
 
       email: normalizedEmail,
@@ -279,7 +444,7 @@ function TeacherForm({
       password: form.password,
 
       contact_number:
-        form.contact_number.trim() || null,
+        contactNumber || null,
 
       employment_type:
         form.employment_type,
@@ -348,12 +513,13 @@ function TeacherForm({
               )
             }
             placeholder="Juan"
+            maxLength={50}
             required
           />
         </Field>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field label="Middle name">
           <input
             className={inputClass}
@@ -364,7 +530,8 @@ function TeacherForm({
                 event.target.value,
               )
             }
-            placeholder="Dela"
+            placeholder="Santos"
+            maxLength={50}
           />
 
           <p className="mt-1 text-xs text-gray-400">
@@ -382,9 +549,51 @@ function TeacherForm({
                 event.target.value,
               )
             }
-            placeholder="Cruz"
+            placeholder="Dela Cruz"
+            maxLength={50}
             required
           />
+        </Field>
+
+        <Field label="Suffix">
+          <select
+            className={inputClass}
+            value={form.suffix}
+            onChange={(event) =>
+              update(
+                "suffix",
+                event.target.value,
+              )
+            }
+          >
+            <option value="">
+              No suffix
+            </option>
+
+            <option value="Jr.">
+              Jr.
+            </option>
+
+            <option value="Sr.">
+              Sr.
+            </option>
+
+            <option value="II">
+              II
+            </option>
+
+            <option value="III">
+              III
+            </option>
+
+            <option value="IV">
+              IV
+            </option>
+
+            <option value="V">
+              V
+            </option>
+          </select>
         </Field>
       </div>
 
@@ -392,8 +601,8 @@ function TeacherForm({
         <div className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5">
           <p
             className={`text-sm font-medium ${buildTeacherFullName(form)
-                ? "text-slate-700"
-                : "text-gray-400"
+              ? "text-slate-700"
+              : "text-gray-400"
               }`}
           >
             {buildTeacherFullName(form) ||
@@ -418,8 +627,8 @@ function TeacherForm({
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5">
             <p
               className={`break-all text-sm font-medium ${form.email
-                  ? "text-slate-700"
-                  : "text-gray-400"
+                ? "text-slate-700"
+                : "text-gray-400"
                 }`}
             >
               {form.email ||
@@ -502,6 +711,7 @@ function TeacherForm({
           <input
             className={inputClass}
             type="tel"
+            inputMode="numeric"
             value={form.contact_number}
             onChange={(event) =>
               update(
@@ -509,8 +719,21 @@ function TeacherForm({
                 event.target.value,
               )
             }
-            placeholder="0917 000 0000"
+            placeholder="09XXXXXXXXX"
+            minLength={
+              form.contact_number
+                ? 11
+                : undefined
+            }
+            maxLength={11}
+            pattern="09[0-9]{9}"
+            title="Enter exactly 11 digits beginning with 09."
           />
+
+          <p className="mt-1 text-xs text-gray-400">
+            Optional. Enter exactly 11 digits
+            beginning with 09.
+          </p>
         </Field>
 
         <Field label="Employment type">
@@ -589,6 +812,7 @@ export default function TeacherModule({
   loading,
   error,
   canDelete = false,
+  onOpenArchivedTeachers,
 }) {
   const [modalMode, setModalMode] = useState(null);
 
@@ -702,44 +926,40 @@ export default function TeacherModule({
     }
   }
 
-  async function handleDelete(teacher) {
-    if (!canDelete) {
-      setActionError(
-        "Only a super administrator can delete teacher accounts.",
-      );
-
-      return;
-    }
-
+  async function handleArchive(teacher) {
     const confirmed = window.confirm(
-      `Permanently delete teacher "${teacher.full_name}"?\n\nThis will also delete the teacher's login account and cannot be undone.`,
+      `Archive teacher "${teacher.full_name}"? The teacher will no longer be able to log in.`,
     );
 
     if (!confirmed) return;
 
+    setSaving(true);
     setActionError("");
 
     try {
       await callTeacherFunction({
-        action: "delete",
+        action: "archive",
         id: teacher.id,
       });
 
       setTeachers((currentTeachers) =>
         currentTeachers.filter(
-          (item) => item.id !== teacher.id,
+          (currentTeacher) =>
+            currentTeacher.id !== teacher.id,
         ),
       );
-    } catch (deleteError) {
+    } catch (archiveError) {
       console.error(
-        "Teacher deletion failed:",
-        deleteError,
+        "Teacher archiving failed:",
+        archiveError,
       );
 
       setActionError(
-        deleteError.message ||
-        "Unable to delete the teacher.",
+        archiveError.message ||
+        "Unable to archive the teacher.",
       );
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -757,6 +977,19 @@ export default function TeacherModule({
           setModalMode("add");
         }}
       />
+
+      {canDelete && onOpenArchivedTeachers && (
+        <div className="-mt-3 mb-5 flex justify-end">
+          <button
+            type="button"
+            onClick={onOpenArchivedTeachers}
+            className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-100"
+          >
+            <Archive className="h-4 w-4" />
+            Archived Teachers
+          </button>
+        </div>
+      )}
 
       {(error || actionError) && (
         <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -822,7 +1055,7 @@ export default function TeacherModule({
                       }}
                       onDelete={
                         canDelete
-                          ? () => handleDelete(teacher)
+                          ? () => handleArchive(teacher)
                           : undefined
                       }
                     />
@@ -851,8 +1084,13 @@ export default function TeacherModule({
 
       {modalMode && (
         <Modal
-          title={modalMode === "edit" ? "Edit Teacher" : "Add Teacher"}
+          title={
+            modalMode === "edit"
+              ? "Edit Teacher"
+              : "Add Teacher"
+          }
           onClose={closeModal}
+          size="xl"
         >
           {actionError && (
             <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">

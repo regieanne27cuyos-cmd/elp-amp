@@ -99,6 +99,50 @@ function formatDate(value) {
   });
 }
 
+function getCurrentManilaDate() {
+  const formatter =
+    new Intl.DateTimeFormat(
+      "en-CA",
+      {
+        timeZone: "Asia/Manila",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      },
+    );
+
+  return formatter.format(
+    new Date(),
+  );
+}
+
+function datesOverlap(
+  firstStart,
+  firstEnd,
+  secondStart,
+  secondEnd,
+) {
+  return (
+    firstStart <= secondEnd &&
+    firstEnd >= secondStart
+  );
+}
+
+function getAutomaticSchoolYearStatus(
+  startDate,
+  endDate,
+) {
+  const today =
+    getCurrentManilaDate();
+
+  return (
+    today >= startDate &&
+    today <= endDate
+  )
+    ? "active"
+    : "inactive";
+}
+
 
 function StatusBadge({ status }) {
   return (
@@ -177,11 +221,22 @@ function buildConfigs(records) {
   return {
     school_years: {
       singular: "School Year",
-      defaults: { name: "", start_date: "", end_date: "", status: "active" },
+
+      defaults: {
+        name: "",
+        start_date: "",
+        end_date: "",
+        status: "inactive",
+      },
+
       fields: [
-        textField("name", "School year", "2026-2027"),
+        textField(
+          "name",
+          "School year",
+          "2026-2027",
+        ),
+
         ...dateFields,
-        statusField,
       ],
       columns: [
         { label: "School Year", render: (row) => row.name },
@@ -368,6 +423,24 @@ export default function AcademicSetup() {
 
   const configs = buildConfigs(records);
   const activeConfig = configs[activeTab];
+
+  const activeSchoolYear =
+    useMemo(() => {
+      const today =
+        getCurrentManilaDate();
+
+      return (
+        records.school_years.find(
+          (schoolYear) =>
+            schoolYear.status ===
+            "active" &&
+            today >=
+            schoolYear.start_date &&
+            today <=
+            schoolYear.end_date,
+        ) || null
+      );
+    }, [records.school_years]);
 
   const groupedSections = useMemo(() => {
     const strandLookup = new Map(
@@ -567,12 +640,48 @@ export default function AcademicSetup() {
 
   function openModal(record = null) {
     if (busyRef.current) return;
-    setForm({ ...activeConfig.defaults, ...(record || {}) });
+
+    if (
+      activeTab === "sections" &&
+      !record &&
+      !activeSchoolYear
+    ) {
+      setNotice(
+        "There is no active school year. Check the school-year dates before adding a section.",
+      );
+
+      return;
+    }
+
+    const initialForm = {
+      ...activeConfig.defaults,
+      ...(record || {}),
+    };
+
+    if (
+      activeTab === "sections" &&
+      !record
+    ) {
+      initialForm.school_year_id =
+        activeSchoolYear.id;
+    }
+
+    setForm(initialForm);
+
     setImageFile(null);
     setRemoveImage(false);
-    setFileKey((value) => value + 1);
+
+    setFileKey(
+      (value) => value + 1,
+    );
+
     setActionError("");
-    setModal({ entity: activeTab, record });
+    setNotice("");
+
+    setModal({
+      entity: activeTab,
+      record,
+    });
   }
 
   function handleImageChange(event) {
@@ -630,12 +739,98 @@ export default function AcademicSetup() {
       payload[field.name] = value;
     }
 
-    if (payload.start_date && payload.end_date < payload.start_date) {
-      throw new Error("End date cannot be before the start date.");
+    if (
+      payload.start_date &&
+      payload.end_date <
+      payload.start_date
+    ) {
+      throw new Error(
+        "End date cannot be before the start date.",
+      );
+    }
+
+    if (entity === "school_years") {
+      const schoolYearNamePattern =
+        /^\d{4}-\d{4}$/;
+
+      if (
+        !schoolYearNamePattern.test(
+          payload.name,
+        )
+      ) {
+        throw new Error(
+          "School year must use the format YYYY-YYYY, for example 2026-2027.",
+        );
+      }
+
+      const [
+        startingYear,
+        endingYear,
+      ] = payload.name
+        .split("-")
+        .map(Number);
+
+      if (
+        endingYear !==
+        startingYear + 1
+      ) {
+        throw new Error(
+          "The ending year must be one year after the starting year.",
+        );
+      }
+
+      const existingOverlap =
+        records.school_years.find(
+          (schoolYear) =>
+            schoolYear.id !==
+            modal?.record?.id &&
+            datesOverlap(
+              payload.start_date,
+              payload.end_date,
+              schoolYear.start_date,
+              schoolYear.end_date,
+            ),
+        );
+
+      if (existingOverlap) {
+        throw new Error(
+          `The selected dates overlap with ${existingOverlap.name} (${formatDate(
+            existingOverlap.start_date,
+          )} to ${formatDate(
+            existingOverlap.end_date,
+          )}).`,
+        );
+      }
+
+      payload.status =
+        getAutomaticSchoolYearStatus(
+          payload.start_date,
+          payload.end_date,
+        );
     }
 
     if (entity === "subjects" || entity === "sections") {
       payload.grade_level = Number(payload.grade_level);
+    }
+
+    if (entity === "sections") {
+
+      if (!modal?.record) {
+        if (!activeSchoolYear) {
+          throw new Error(
+            "There is no active school year. Configure the current school year first.",
+          );
+        }
+
+        if (
+          payload.school_year_id !==
+          activeSchoolYear.id
+        ) {
+          throw new Error(
+            "New sections can only be added to the active school year.",
+          );
+        }
+      }
     }
 
     if (entity === "subjects") {
@@ -787,14 +982,37 @@ export default function AcademicSetup() {
   }
 
   function renderField(field) {
+    const isAutomaticSectionYear =
+      modal?.entity === "sections" &&
+      field.name ===
+      "school_year_id" &&
+      !modal?.record;
+
     const props = {
       id: `academic-${field.name}`,
-      className: inputClass,
-      value: form[field.name] ?? "",
+
+      className: `${inputClass} ${isAutomaticSectionYear
+          ? "cursor-not-allowed bg-gray-100 text-gray-600"
+          : ""
+        }`,
+
+      value:
+        form[field.name] ?? "",
+
       required: field.required,
+
+      disabled:
+        saving ||
+        isAutomaticSectionYear,
+
       onChange: (event) => {
-        const value = event.target.value;
-        setForm((current) => ({ ...current, [field.name]: value }));
+        const value =
+          event.target.value;
+
+        setForm((current) => ({
+          ...current,
+          [field.name]: value,
+        }));
       },
     };
 
@@ -1264,6 +1482,37 @@ export default function AcademicSetup() {
           <form onSubmit={handleSubmit}>
             <fieldset disabled={saving} className="space-y-4">
               {configs[modal.entity].fields.map(renderField)}
+
+              {modal.entity ===
+                "school_years" && (
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
+                    <p className="text-sm font-medium text-blue-700">
+                      Automatic school-year status
+                    </p>
+
+                    <p className="mt-1 text-xs leading-5 text-blue-600">
+                      A future school year will be
+                      saved as inactive. It will
+                      automatically become active
+                      when its start date arrives and
+                      return to inactive after its end
+                      date.
+                    </p>
+
+                    {form.start_date &&
+                      form.end_date && (
+                        <p className="mt-2 text-xs font-semibold text-blue-700">
+                          Current calculated status:{" "}
+                          {formatStatus(
+                            getAutomaticSchoolYearStatus(
+                              form.start_date,
+                              form.end_date,
+                            ),
+                          )}
+                        </p>
+                      )}
+                  </div>
+                )}
 
               {modal.entity === "subjects" && (
                 <div className="space-y-3">
