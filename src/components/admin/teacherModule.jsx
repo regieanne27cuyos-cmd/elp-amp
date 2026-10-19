@@ -67,20 +67,6 @@ function isValidContactNumber(value) {
   );
 }
 
-function getNextTeacherNumber(teachers) {
-  const highestNumber = teachers.reduce((highest, teacher) => {
-    const match = String(teacher.teacher_number || "").match(/(\d+)$/);
-    const number = match ? Number.parseInt(match[1], 10) : 0;
-
-    return Math.max(highest, number);
-  }, 0);
-
-  const year = new Date().getFullYear();
-  const nextNumber = String(highestNumber + 1).padStart(3, "0");
-
-  return `T-${year}-${nextNumber}`;
-}
-
 function createSixDigitNumber() {
   return String(
     Math.floor(100000 + Math.random() * 900000),
@@ -822,6 +808,16 @@ export default function TeacherModule({
 
   const [actionError, setActionError] = useState("");
 
+  const [
+    suggestedTeacherNumber,
+    setSuggestedTeacherNumber,
+  ] = useState("");
+
+  const [
+    loadingTeacherNumber,
+    setLoadingTeacherNumber,
+  ] = useState(false);
+
   function closeModal() {
     if (saving) return;
 
@@ -864,6 +860,44 @@ export default function TeacherModule({
     }
 
     return data;
+  }
+
+  async function openAddTeacherModal() {
+    setSelected(null);
+    setActionError("");
+    setLoadingTeacherNumber(true);
+
+    try {
+      const result =
+        await callTeacherFunction({
+          action:
+            "get_next_teacher_number",
+        });
+
+      if (!result?.teacher_number) {
+        throw new Error(
+          "The server did not return a teacher number.",
+        );
+      }
+
+      setSuggestedTeacherNumber(
+        result.teacher_number,
+      );
+
+      setModalMode("add");
+    } catch (numberError) {
+      console.error(
+        "Failed to generate teacher number:",
+        numberError,
+      );
+
+      setActionError(
+        numberError.message ||
+        "Unable to generate a teacher number.",
+      );
+    } finally {
+      setLoadingTeacherNumber(false);
+    }
   }
 
   async function handleSave(form) {
@@ -968,14 +1002,12 @@ export default function TeacherModule({
       <SectionHeader
         title="Teacher Management"
         count={teachers.length}
-        addLabel="Add Teacher"
-        onAdd={() => {
-          setSelected(null);
-
-          setActionError("");
-
-          setModalMode("add");
-        }}
+        addLabel={
+          loadingTeacherNumber
+            ? "Preparing..."
+            : "Add Teacher"
+        }
+        onAdd={openAddTeacherModal}
       />
 
       {canDelete && onOpenArchivedTeachers && (
@@ -1099,9 +1131,16 @@ export default function TeacherModule({
           )}
 
           <TeacherForm
-            key={selected?.id || `new-${getNextTeacherNumber(teachers)}`}
+            key={
+              selected?.id ||
+              `new-${suggestedTeacherNumber ||
+              "teacher"
+              }`
+            }
             initialData={selected}
-            suggestedTeacherNumber={getNextTeacherNumber(teachers)}
+            suggestedTeacherNumber={
+              suggestedTeacherNumber
+            }
             onCancel={closeModal}
             onSave={handleSave}
             saving={saving}

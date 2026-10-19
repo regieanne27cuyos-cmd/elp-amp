@@ -477,7 +477,7 @@ function StudentForm({
           <option value="">
             {sectionsLoading
               ? "Loading sections..."
-              : "Unassigned — assign later"}
+              : "Assign later"}
           </option>
 
           {sections.map((section) => (
@@ -571,27 +571,9 @@ function StudentForm({
   );
 }
 
-function getNextStudentNumber(
-  existingStudents,
-  rowIndex = 0,
-) {
-  const highestNumber = existingStudents.reduce(
-    (highest, student) => {
-      const match = String(student.student_number || "").match(/(\d+)$/);
-      const number = match ? Number.parseInt(match[1], 10) : 0;
-      return Math.max(highest, number);
-    },
-    0,
-  );
-  const nextNumber = highestNumber + rowIndex + 1;
-  const year = new Date().getFullYear();
-  return `S-${year}-${String(nextNumber).padStart(
-    3,
-    "0",
-  )}`;
-}
+
+
 function BulkStudentForm({
-  existingStudents,
   sections,
   sectionsLoading,
   saving,
@@ -641,7 +623,7 @@ function BulkStudentForm({
     setFormError("");
   }
 
-  function addRow() {
+  function git statusaddRow() {
     if (rows.length >= 50) {
       setFormError("You can add a maximum of 50 students per batch.");
       return;
@@ -732,23 +714,41 @@ function BulkStudentForm({
       return;
     }
 
-    const students = rows.map((row, index) => ({
-      student_number: getNextStudentNumber(
-        existingStudents,
-        index,
-      ),
-      full_name: buildFullName(row),
-      first_name: row.first_name.trim(),
-      middle_name: row.middle_name.trim() || null,
-      last_name: row.last_name.trim(),
-      suffix: row.suffix || null,
-      email: buildStudentEmail(
-        row.last_name,
-        row.email_code,
-      ),
-      contact_number:
-        row.contact_number.trim() || null,
-    }));
+    const students = rows.map(
+      (row) => ({
+        /*
+         * student_number is intentionally
+         * omitted. Supabase generates it
+         * using all active and archived
+         * student records.
+         */
+        full_name:
+          buildFullName(row),
+
+        first_name:
+          row.first_name.trim(),
+
+        middle_name:
+          row.middle_name.trim() ||
+          null,
+
+        last_name:
+          row.last_name.trim(),
+
+        suffix:
+          row.suffix || null,
+
+        email:
+          buildStudentEmail(
+            row.last_name,
+            row.email_code,
+          ),
+
+        contact_number:
+          row.contact_number.trim() ||
+          null,
+      }),
+    );
     const emails = students.map((student) => student.email.toLowerCase());
     if (new Set(emails).size !== emails.length) {
       setFormError(
@@ -786,7 +786,7 @@ function BulkStudentForm({
             <option value="">
               {sectionsLoading
                 ? "Loading available sections..."
-                : "Unassigned — assign later"}
+                : "Assign later"}
             </option>
             {sections.map((section) => (
               <option
@@ -861,19 +861,16 @@ function BulkStudentForm({
             className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
-            Add Row
+            Add More
           </button>
         </div>
         <div className="grid max-h-[600px] grid-cols-1 gap-4 overflow-y-auto pr-1 lg:grid-cols-2">
           {rows.map((row, index) => {
-            const studentNumber = getNextStudentNumber(
-              existingStudents,
-              index,
-            );
-            const generatedEmail = buildStudentEmail(
-              row.last_name,
-              row.email_code,
-            );
+            const generatedEmail =
+              buildStudentEmail(
+                row.last_name,
+                row.email_code,
+              );
             return (
               <div
                 key={index}
@@ -898,12 +895,15 @@ function BulkStudentForm({
                     <label className="mb-1 block text-xs font-medium text-gray-600">
                       Student number
                     </label>
-                    <div className="rounded-lg border border-gray-200 bg-white px-3.5 py-2.5">
-                      <p className="text-sm font-semibold text-slate-700">
-                        {studentNumber}
+
+                    <div className="rounded-lg border border-dashed border-gray-300 bg-white px-3.5 py-2.5">
+                      <p className="text-sm font-medium text-gray-500">
+                        Assigned after saving
                       </p>
+
                       <p className="mt-0.5 text-xs text-gray-400">
-                        Generated automatically
+                        Active and archived student
+                        numbers are counted
                       </p>
                     </div>
                   </div>
@@ -2057,9 +2057,6 @@ export default function StudentModule({
             sections={sections}
             sectionsLoading={
               sectionsLoading
-            }
-            existingStudents={
-              students
             }
             onCancel={closeModal}
             onSave={
