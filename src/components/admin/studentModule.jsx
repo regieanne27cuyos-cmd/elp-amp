@@ -623,7 +623,7 @@ function BulkStudentForm({
     setFormError("");
   }
 
-  function git statusaddRow() {
+  function addRow() {
     if (rows.length >= 50) {
       setFormError("You can add a maximum of 50 students per batch.");
       return;
