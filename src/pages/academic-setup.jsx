@@ -442,6 +442,7 @@ export default function AcademicSetup() {
       );
     }, [records.school_years]);
 
+    
   const groupedSections = useMemo(() => {
     const strandLookup = new Map(
       records.strands.map((strand) => [

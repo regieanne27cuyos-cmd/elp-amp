@@ -13,6 +13,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import useStudentDashboard from "../hooks/useStudentDashboard";
+import useStudentNotifications from "../hooks/useStudentNotifications";
 import StudentDashboardHome from "../components/student/studentDashboardHome";
 import StudentAssignments from "../components/student/studentAssignments";
 import StudentActivityWork from "../components/student/studentActivityWork";
@@ -21,6 +22,8 @@ import StudentProfile from "../components/student/studentProfile";
 import StudentClassesModule from "../components/student/studentClassesModule";
 import StudentClassWorkspace from "../components/student/studentClassWorkspace";
 import StudentAnnouncements from "../components/student/studentAnnouncements";
+import StudentCalendar from "../components/student/studentCalendar";
+
 
 const navigationItems = [
   {
@@ -183,6 +186,15 @@ export default function StudentDashboard() {
     reload,
   } = useStudentDashboard();
 
+  const {
+    notifications,
+    unreadCount,
+    loading: notificationsLoading,
+    error: notificationsError,
+    markAsRead,
+    markAllAsRead,
+  } = useStudentNotifications(student?.id);
+
   const [activeView, setActiveView] =
     useState("dashboard");
 
@@ -327,10 +339,12 @@ export default function StudentDashboard() {
 
     if (activeView === "calendar") {
       return (
-        <PlaceholderView
-          title="Student Calendar"
-          description="Activity deadlines and school events will appear here."
-          icon={CalendarDays}
+        <StudentCalendar
+          activities={activities}
+          loading={loading}
+          error={error}
+          onRetry={handleRetry}
+          onOpenActivity={openActivity}
         />
       );
     }
@@ -372,7 +386,49 @@ export default function StudentDashboard() {
       <div className="flex min-w-0 flex-1 flex-col">
         <StudentHeader
           studentProfile={student}
-          announcementCount={0}
+          notifications={notifications}
+          notificationCount={unreadCount}
+          notificationsLoading={
+            notificationsLoading
+          }
+          notificationsError={
+            notificationsError
+          }
+          onOpenNotification={async (
+            notification,
+          ) => {
+            try {
+              await markAsRead(notification.id);
+
+              if (
+                ["activity", "grade"].includes(
+                  notification.notification_type,
+                ) &&
+                notification.activity_id
+              ) {
+                const activity =
+                  activities.find(
+                    (item) =>
+                      item.id ===
+                      notification.activity_id,
+                  );
+
+                if (activity) {
+                  openActivity(activity);
+                } else {
+                  selectView("assignments");
+                }
+              }
+            } catch (notificationError) {
+              console.error(
+                "Unable to open notification:",
+                notificationError,
+              );
+            }
+          }}
+          onMarkAllNotificationsRead={
+            markAllAsRead
+          }
           onOpenSidebar={() =>
             setMobileOpen(true)
           }

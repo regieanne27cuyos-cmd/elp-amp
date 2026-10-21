@@ -1,4 +1,7 @@
+import { useState } from "react";
 import {
+  Eye,
+  EyeOff,
   Pencil,
   Plus,
   Trash2,
@@ -7,6 +10,70 @@ import {
 
 export const inputClass =
   "w-full bg-gray-50 rounded-lg px-3.5 py-2.5 text-sm outline-none border border-transparent focus:border-slate-300 focus:bg-white transition-colors";
+
+export function PasswordInput({
+  id,
+  value,
+  onChange,
+  placeholder = "Enter password",
+  required = false,
+  disabled = false,
+  minLength,
+  autoComplete = "new-password",
+}) {
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
+
+  return (
+    <div className="relative">
+      <input
+        id={id}
+        type={
+          showPassword
+            ? "text"
+            : "password"
+        }
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        required={required}
+        disabled={disabled}
+        minLength={minLength}
+        autoComplete={autoComplete}
+        className={`${inputClass} pr-11`}
+      />
+
+      <button
+        type="button"
+        onClick={() =>
+          setShowPassword(
+            (current) => !current,
+          )
+        }
+        disabled={disabled}
+        className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-gray-400 transition-colors hover:text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+        aria-label={
+          showPassword
+            ? "Hide password"
+            : "Show password"
+        }
+        title={
+          showPassword
+            ? "Hide password"
+            : "Show password"
+        }
+      >
+        {showPassword ? (
+          <EyeOff className="h-4 w-4" />
+        ) : (
+          <Eye className="h-4 w-4" />
+        )}
+      </button>
+    </div>
+  );
+}
 
 export function Modal({
   title,

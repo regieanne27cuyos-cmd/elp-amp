@@ -47,7 +47,14 @@ function formatDate(value) {
   });
 }
 
-function formatActivityType(value) {
+function formatActivityType(
+  value,
+  customActivityType,
+) {
+  if (customActivityType?.trim()) {
+    return customActivityType.trim();
+  }
+
   if (value === "performance_task") {
     return "Performance Task";
   }
@@ -138,7 +145,7 @@ function ActivityOverview({
   const deadlinePassed =
     activity.due_at &&
     new Date(activity.due_at) <
-      new Date();
+    new Date();
 
   return (
     <div className="space-y-6 p-5 sm:p-6">
@@ -155,18 +162,18 @@ function ActivityOverview({
               <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
                 {formatActivityType(
                   activity.activity_type,
+                  activity.custom_activity_type,
                 )}
               </span>
 
               <span
-                className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
+                className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${activity.status ===
+                  "published" ||
                   activity.status ===
-                    "published" ||
-                  activity.status ===
-                    "active"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-gray-100 text-gray-600"
-                }`}
+                  "active"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-gray-100 text-gray-600"
+                  }`}
               >
                 {activity.status || "Draft"}
               </span>
@@ -210,13 +217,11 @@ function ActivityOverview({
           label="Section"
           value={
             classRecord?.section
-              ? `Grade ${
-                  classRecord.section
-                    .grade_level || "—"
-                } · ${
-                  classRecord.section
-                    .section_name || "—"
-                }`
+              ? `Grade ${classRecord.section
+                .grade_level || "—"
+              } · ${classRecord.section
+                .section_name || "—"
+              }`
               : "Section unavailable"
           }
         />
@@ -264,29 +269,29 @@ function ActivityOverview({
       {(activity.instruction_file_url ||
         activity.instruction_file_path ||
         activity.attachment_url) && (
-        <section className="rounded-xl border border-gray-100 bg-white">
-          <div className="border-b border-gray-100 px-5 py-4">
-            <h3 className="font-bold text-gray-900">
-              Instruction File
-            </h3>
-          </div>
+          <section className="rounded-xl border border-gray-100 bg-white">
+            <div className="border-b border-gray-100 px-5 py-4">
+              <h3 className="font-bold text-gray-900">
+                Instruction File
+              </h3>
+            </div>
 
-          <div className="p-5">
-            <a
-              href={
-                activity.instruction_file_url ||
-                activity.attachment_url
-              }
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-600 hover:bg-blue-100"
-            >
-              <FileText className="h-4 w-4" />
-              Open instruction file
-            </a>
-          </div>
-        </section>
-      )}
+            <div className="p-5">
+              <a
+                href={
+                  activity.instruction_file_url ||
+                  activity.attachment_url
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2.5 text-sm font-medium text-blue-600 hover:bg-blue-100"
+              >
+                <FileText className="h-4 w-4" />
+                Open instruction file
+              </a>
+            </div>
+          </section>
+        )}
     </div>
   );
 }
@@ -329,6 +334,7 @@ export default function TeacherActivityWorkspace({
         <p className="mt-1 text-sm text-gray-500">
           {formatActivityType(
             activity.activity_type,
+            activity.custom_activity_type,
           )}
           {" · "}
           {classRecord?.section
@@ -363,11 +369,10 @@ export default function TeacherActivityWorkspace({
                   onClick={() =>
                     setActiveTab(key)
                   }
-                  className={`flex min-w-fit items-center gap-2 border-b-2 px-5 py-4 text-sm font-medium ${
-                    active
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-gray-500 hover:text-gray-900"
-                  }`}
+                  className={`flex min-w-fit items-center gap-2 border-b-2 px-5 py-4 text-sm font-medium ${active
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-900"
+                    }`}
                 >
                   <Icon className="h-4 w-4" />
                   {label}

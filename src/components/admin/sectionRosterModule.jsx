@@ -97,6 +97,11 @@ function AddStudentsModal({
   selectedIds,
   search,
   saving,
+  currentStudentCount,
+  normalAvailableSlots,
+  maximumAvailableSlots,
+  overrideCapacity,
+  onOverrideCapacityChange,
   onSearchChange,
   onToggle,
   onSelectAll,
@@ -132,7 +137,84 @@ function AddStudentsModal({
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-6">
-          <div className="relative">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <p className="text-xs text-gray-400">
+                Current students
+              </p>
+
+              <p className="mt-1 text-lg font-bold text-gray-900">
+                {currentStudentCount}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <p className="text-xs text-gray-400">
+                Normal capacity
+              </p>
+
+              <p className="mt-1 text-lg font-bold text-gray-900">
+                40
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <p className="text-xs text-gray-400">
+                Available slots
+              </p>
+
+              <p className="mt-1 text-lg font-bold text-blue-600">
+                {maximumAvailableSlots}
+              </p>
+            </div>
+          </div>
+
+          {currentStudentCount === 40 && (
+            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <input
+                type="checkbox"
+                checked={overrideCapacity}
+                onChange={(event) =>
+                  onOverrideCapacityChange(
+                    event.target.checked,
+                  )
+                }
+                disabled={saving}
+                className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+              />
+
+              <div>
+                <p className="text-sm font-semibold text-amber-800">
+                  Override section capacity
+                </p>
+
+                <p className="mt-1 text-xs leading-5 text-amber-700">
+                  The section already has 40 students.
+                  Enable this option to add one additional
+                  student. The absolute maximum is 41.
+                </p>
+              </div>
+            </label>
+          )}
+
+          {currentStudentCount >= 41 && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              This section has reached the override limit of
+              41 students. Remove a student before adding
+              another one.
+            </div>
+          )}
+
+          {currentStudentCount < 40 && (
+            <p className="mt-3 text-xs text-gray-500">
+              This section has {normalAvailableSlots} normal{" "}
+              slot
+              {normalAvailableSlots === 1 ? "" : "s"}{" "}
+              remaining.
+            </p>
+          )}
+
+          <div className="relative mt-4">
             <label
               htmlFor="available-student-search"
               className="sr-only"
@@ -162,9 +244,13 @@ function AddStudentsModal({
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={onSelectAll}
+                onClick={() =>
+                  onSelectAll(maximumAvailableSlots)
+                }
                 disabled={
-                  candidates.length === 0 || saving
+                  candidates.length === 0 ||
+                  saving ||
+                  maximumAvailableSlots === 0
                 }
                 className="text-sm font-medium text-blue-600 hover:underline disabled:text-gray-300"
               >
@@ -224,11 +310,10 @@ function AddStudentsModal({
                           onChange={() =>
                             onToggle(student.id)
                           }
-                          aria-label={`Select ${
-                            student.profile
-                              ?.full_name ||
+                          aria-label={`Select ${student.profile
+                            ?.full_name ||
                             student.student_number
-                          }`}
+                            }`}
                           className="h-4 w-4 rounded border-gray-300 text-blue-600"
                         />
                       </td>
@@ -285,7 +370,11 @@ function AddStudentsModal({
             type="button"
             onClick={onSubmit}
             disabled={
-              saving || selectedIds.length === 0
+              saving ||
+              selectedIds.length === 0 ||
+              maximumAvailableSlots === 0 ||
+              selectedIds.length >
+              maximumAvailableSlots
             }
             className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -297,11 +386,10 @@ function AddStudentsModal({
 
             {saving
               ? "Adding..."
-              : `Add ${selectedIds.length} Student${
-                  selectedIds.length === 1
-                    ? ""
-                    : "s"
-                }`}
+              : `Add ${selectedIds.length} Student${selectedIds.length === 1
+                ? ""
+                : "s"
+              }`}
           </button>
         </footer>
       </div>
@@ -339,6 +427,11 @@ export default function SectionRosterModule() {
 
   const [selectedAddIds, setSelectedAddIds] =
     useState([]);
+
+  const [
+    overrideSectionCapacity,
+    setOverrideSectionCapacity,
+  ] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -476,12 +569,31 @@ export default function SectionRosterModule() {
       counts.set(
         student.section_id,
         (counts.get(student.section_id) || 0) +
-          1,
+        1,
       );
     });
 
     return counts;
   }, [students]);
+
+  const selectedSectionStudentCount =
+    selectedSection
+      ? sectionCounts.get(selectedSection.id) || 0
+      : 0;
+
+  const normalAvailableSlots = Math.max(
+    0,
+    40 - selectedSectionStudentCount,
+  );
+
+  const maximumAvailableSlots = Math.max(
+    0,
+    (overrideSectionCapacity ? 41 : 40) -
+    selectedSectionStudentCount,
+  );
+
+  const sectionReachedOverrideLimit =
+    selectedSectionStudentCount >= 41;
 
   const filteredSections = useMemo(() => {
     const query = sectionSearch
@@ -601,29 +713,47 @@ export default function SectionRosterModule() {
     );
   }
 
-  function selectAllVisibleRosterStudents() {
-    setSelectedRosterIds((current) => {
-      const ids = filteredRosterStudents.map(
-        (student) => student.id,
-      );
+  function selectAllAddCandidates(maximum) {
+    const availableIds = availableStudents
+      .slice(0, maximum)
+      .map((student) => student.id);
 
-      return Array.from(
-        new Set([...current, ...ids]),
-      );
-    });
+    setSelectedAddIds(availableIds);
+    setPageError("");
   }
 
   function toggleAddStudent(studentId) {
-    setSelectedAddIds((current) =>
-      current.includes(studentId)
-        ? current.filter((id) => id !== studentId)
-        : [...current, studentId],
-    );
+    setSelectedAddIds((current) => {
+      if (current.includes(studentId)) {
+        return current.filter(
+          (id) => id !== studentId,
+        );
+      }
+
+      if (
+        current.length >= maximumAvailableSlots
+      ) {
+        setPageError(
+          overrideSectionCapacity
+            ? "The section can only have a maximum of 41 students."
+            : "The normal section capacity is 40 students.",
+        );
+
+        return current;
+      }
+
+      setPageError("");
+
+      return [...current, studentId];
+    });
   }
 
   function openAddStudents() {
+    if (!selectedSection) return;
+
     setAddSearch("");
     setSelectedAddIds([]);
+    setOverrideSectionCapacity(false);
     setSuccessMessage("");
     setPageError("");
     setAddModalOpen(true);
@@ -635,6 +765,7 @@ export default function SectionRosterModule() {
     setAddModalOpen(false);
     setAddSearch("");
     setSelectedAddIds([]);
+    setOverrideSectionCapacity(false);
   }
 
   async function addStudentsToSection() {
@@ -642,6 +773,24 @@ export default function SectionRosterModule() {
       !selectedSection ||
       selectedAddIds.length === 0
     ) {
+      return;
+    }
+
+    if (
+      selectedAddIds.length >
+      maximumAvailableSlots
+    ) {
+      const availableWord =
+        maximumAvailableSlots === 1
+          ? "student"
+          : "students";
+
+      setPageError(
+        overrideSectionCapacity
+          ? `You can only add ${maximumAvailableSlots} more ${availableWord}. The override maximum is 41 students.`
+          : `You can only add ${normalAvailableSlots} more ${availableWord}. The normal section capacity is 40 students.`,
+      );
+
       return;
     }
 
@@ -655,6 +804,8 @@ export default function SectionRosterModule() {
         {
           p_section_id: selectedSection.id,
           p_student_ids: selectedAddIds,
+          p_override_capacity:
+            overrideSectionCapacity,
         },
       );
 
@@ -668,16 +819,15 @@ export default function SectionRosterModule() {
         current.map((student) =>
           selectedIds.has(student.id)
             ? {
-                ...student,
-                section_id: selectedSection.id,
-              }
+              ...student,
+              section_id: selectedSection.id,
+            }
             : student,
         ),
       );
 
       setSuccessMessage(
-        `${data || selectedAddIds.length} student${
-          Number(data) === 1 ? "" : "s"
+        `${data || selectedAddIds.length} student${Number(data) === 1 ? "" : "s"
         } added to ${selectedSection.section_name}.`,
       );
 
@@ -708,10 +858,9 @@ export default function SectionRosterModule() {
     }
 
     const confirmed = window.confirm(
-      `Remove ${selectedRosterIds.length} student${
-        selectedRosterIds.length === 1
-          ? ""
-          : "s"
+      `Remove ${selectedRosterIds.length} student${selectedRosterIds.length === 1
+        ? ""
+        : "s"
       } from ${selectedSection.section_name}? Their accounts will not be deleted.`,
     );
 
@@ -740,9 +889,9 @@ export default function SectionRosterModule() {
         current.map((student) =>
           removedIds.has(student.id)
             ? {
-                ...student,
-                section_id: null,
-              }
+              ...student,
+              section_id: null,
+            }
             : student,
         ),
       );
@@ -750,8 +899,7 @@ export default function SectionRosterModule() {
       setSelectedRosterIds([]);
 
       setSuccessMessage(
-        `${data || removedIds.size} student${
-          Number(data) === 1 ? "" : "s"
+        `${data || removedIds.size} student${Number(data) === 1 ? "" : "s"
         } removed from the section. Their accounts remain active.`,
       );
     } catch (removeError) {
@@ -1066,7 +1214,7 @@ export default function SectionRosterModule() {
                   type="checkbox"
                   checked={
                     filteredRosterStudents.length >
-                      0 &&
+                    0 &&
                     filteredRosterStudents.every(
                       (student) =>
                         selectedRosterIds.includes(
@@ -1134,11 +1282,10 @@ export default function SectionRosterModule() {
                           student.id,
                         )
                       }
-                      aria-label={`Select ${
-                        student.profile
-                          ?.full_name ||
+                      aria-label={`Select ${student.profile
+                        ?.full_name ||
                         student.student_number
-                      }`}
+                        }`}
                       className="h-4 w-4 rounded border-gray-300 text-blue-600"
                     />
                   </td>
@@ -1171,38 +1318,52 @@ export default function SectionRosterModule() {
 
             {filteredRosterStudents.length ===
               0 && (
-              <tr>
-                <td
-                  colSpan={5}
-                  className="px-5 py-10 text-center text-gray-400"
-                >
-                  {rosterStudents.length === 0
-                    ? "No students are currently enrolled in this section."
-                    : "No students match your search."}
-                </td>
-              </tr>
-            )}
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-5 py-10 text-center text-gray-400"
+                  >
+                    {rosterStudents.length === 0
+                      ? "No students are currently enrolled in this section."
+                      : "No students match your search."}
+                  </td>
+                </tr>
+              )}
           </tbody>
         </table>
       </div>
 
-      {addModalOpen && (
+      {addModalOpen && selectedSection && (
         <AddStudentsModal
           section={selectedSection}
           candidates={availableStudents}
           selectedIds={selectedAddIds}
           search={addSearch}
           saving={saving}
+          currentStudentCount={
+            selectedSectionStudentCount
+          }
+          normalAvailableSlots={
+            normalAvailableSlots
+          }
+          maximumAvailableSlots={
+            maximumAvailableSlots
+          }
+          overrideCapacity={
+            overrideSectionCapacity
+          }
+          onOverrideCapacityChange={(checked) => {
+            setOverrideSectionCapacity(checked);
+            setSelectedAddIds([]);
+            setPageError("");
+          }}
           onSearchChange={setAddSearch}
           onToggle={toggleAddStudent}
-          onSelectAll={() =>
-            setSelectedAddIds(
-              availableStudents.map(
-                (student) => student.id,
-              ),
-            )
-          }
-          onClear={() => setSelectedAddIds([])}
+          onSelectAll={selectAllAddCandidates}
+          onClear={() => {
+            setSelectedAddIds([]);
+            setPageError("");
+          }}
           onClose={closeAddStudents}
           onSubmit={addStudentsToSection}
         />

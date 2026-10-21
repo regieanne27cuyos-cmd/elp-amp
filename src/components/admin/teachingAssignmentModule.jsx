@@ -1143,6 +1143,7 @@ export default function TeachingAssignmentModule() {
               : "Assign Multiple Subjects"
           }
           onClose={closeModal}
+          size="xl"
         >
           {actionError && (
             <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">

@@ -186,6 +186,7 @@ function formatStudentDisplayName(student) {
 function StudentForm({
   initialData,
   sections,
+  sectionStudentCounts,
   sectionsLoading,
   onCancel,
   onSave,
@@ -315,6 +316,21 @@ function StudentForm({
         "The new password must contain at least 8 characters.",
       );
       return;
+    }
+
+    if (
+      form.section_id &&
+      form.section_id !== initialData?.section_id
+    ) {
+      const selectedSectionCount =
+        sectionStudentCounts.get(form.section_id) || 0;
+
+      if (selectedSectionCount >= 40) {
+        setFormError(
+          "The selected section is already full. A section can only have 40 students.",
+        );
+        return;
+      }
     }
 
     const normalizedStudent = {
@@ -480,14 +496,29 @@ function StudentForm({
               : "Assign later"}
           </option>
 
-          {sections.map((section) => (
-            <option
-              key={section.id}
-              value={section.id}
-            >
-              {sectionLabel(section)}
-            </option>
-          ))}
+          {sections.map((section) => {
+            const studentCount =
+              sectionStudentCounts.get(section.id) || 0;
+
+            const isCurrentSection =
+              initialData?.section_id === section.id;
+
+            const isFull =
+              studentCount >= 40 && !isCurrentSection;
+
+            return (
+              <option
+                key={section.id}
+                value={section.id}
+                disabled={isFull}
+              >
+                {sectionLabel(section)}
+                {" · "}
+                {studentCount}/40 students
+                {isFull ? " — Full" : ""}
+              </option>
+            );
+          })}
         </select>
 
         <p className="mt-1.5 text-xs text-gray-400">
@@ -575,6 +606,7 @@ function StudentForm({
 
 function BulkStudentForm({
   sections,
+  sectionStudentCounts,
   sectionsLoading,
   saving,
   onCancel,
@@ -589,6 +621,33 @@ function BulkStudentForm({
     createStudentRow(),
   ]);
   const [formError, setFormError] = useState("");
+
+  const selectedSection = useMemo(
+    () =>
+      sections.find(
+        (section) => section.id === sectionId,
+      ) || null,
+    [sections, sectionId],
+  );
+
+  const selectedSectionStudentCount =
+    selectedSection
+      ? sectionStudentCounts.get(
+        selectedSection.id,
+      ) || 0
+      : 0;
+
+  const remainingSectionSlots =
+    selectedSection
+      ? Math.max(
+        0,
+        40 - selectedSectionStudentCount,
+      )
+      : 50;
+
+  const maximumRows = selectedSection
+    ? remainingSectionSlots
+    : 50;
 
   function updateRow(index, field, value) {
     let updatedValue = value;
@@ -624,13 +683,37 @@ function BulkStudentForm({
   }
 
   function addRow() {
-    if (rows.length >= 50) {
-      setFormError("You can add a maximum of 50 students per batch.");
+    if (
+      selectedSection &&
+      remainingSectionSlots === 0
+    ) {
+      setFormError(
+        "The selected section is already full.",
+      );
       return;
     }
-    setRows((currentRows) => [...currentRows, createStudentRow()]);
+
+    if (rows.length >= maximumRows) {
+      setFormError(
+        selectedSection
+          ? `Only ${remainingSectionSlots} slot${remainingSectionSlots === 1
+            ? ""
+            : "s"
+          } remain in this section.`
+          : "You can add a maximum of 50 unassigned students per batch.",
+      );
+
+      return;
+    }
+
+    setRows((currentRows) => [
+      ...currentRows,
+      createStudentRow(),
+    ]);
+
     setFormError("");
   }
+
   function removeRow(index) {
     setRows((currentRows) => {
       if (currentRows.length === 1) {
@@ -643,6 +726,34 @@ function BulkStudentForm({
   function handleSubmit(event) {
     event.preventDefault();
     setFormError("");
+
+    if (
+      selectedSection &&
+      remainingSectionSlots === 0
+    ) {
+      setFormError(
+        "The selected section is already full. Select another section or create the students without a section.",
+      );
+      return;
+    }
+
+    if (
+      selectedSection &&
+      rows.length > remainingSectionSlots
+    ) {
+      const excessRows =
+        rows.length - remainingSectionSlots;
+
+      setFormError(
+        `This section only has ${remainingSectionSlots} remaining slot${remainingSectionSlots === 1
+          ? ""
+          : "s"
+        }. Remove ${excessRows} student row${excessRows === 1 ? "" : "s"
+        } or choose another section.`,
+      );
+      return;
+    }
+
     if (password.length < 8) {
       setFormError(
         "The temporary password must contain at least 8 characters.",
@@ -778,9 +889,10 @@ function BulkStudentForm({
           <select
             className={inputClass}
             value={sectionId}
-            onChange={(event) =>
-              setSectionId(event.target.value)
-            }
+            onChange={(event) => {
+              setSectionId(event.target.value);
+              setFormError("");
+            }}
             disabled={sectionsLoading}
           >
             <option value="">
@@ -788,14 +900,33 @@ function BulkStudentForm({
                 ? "Loading available sections..."
                 : "Assign later"}
             </option>
-            {sections.map((section) => (
-              <option
-                key={section.id}
-                value={section.id}
-              >
-                {sectionLabel(section)}
-              </option>
-            ))}
+            {sections.map((section) => {
+              const studentCount =
+                sectionStudentCounts.get(section.id) || 0;
+
+              const remainingSlots = Math.max(
+                0,
+                40 - studentCount,
+              );
+
+              const isFull = remainingSlots === 0;
+
+              return (
+                <option
+                  key={section.id}
+                  value={section.id}
+                  disabled={isFull}
+                >
+                  {sectionLabel(section)}
+                  {" · "}
+                  {studentCount}/40 students
+                  {isFull
+                    ? " — Full"
+                    : ` — ${remainingSlots} slot${remainingSlots === 1 ? "" : "s"
+                    } left`}
+                </option>
+              );
+            })}
           </select>
           <p className="mt-1.5 text-xs text-gray-400">
             All students in this batch can be created
@@ -851,13 +982,20 @@ function BulkStudentForm({
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Students</h3>
             <p className="text-xs text-gray-400">
-              {rows.length} of 50 students
+              {rows.length} of {maximumRows} students
+              {selectedSection
+                ? " based on the section’s remaining slots"
+                : " in this batch"}
             </p>
           </div>
           <button
             type="button"
             onClick={addRow}
-            disabled={saving || rows.length >= 50}
+            disabled={
+              saving ||
+              maximumRows === 0 ||
+              rows.length >= maximumRows
+            }
             className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
@@ -1048,7 +1186,13 @@ function BulkStudentForm({
         </button>
         <button
           type="submit"
-          disabled={saving || sectionsLoading}
+          disabled={
+            saving ||
+            sectionsLoading ||
+            (Boolean(selectedSection) &&
+              (remainingSectionSlots === 0 ||
+                rows.length > remainingSectionSlots))
+          }
           className="flex-1 rounded-lg bg-slate-800 py-2.5 text-sm font-medium text-white hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {saving
@@ -1102,6 +1246,22 @@ export default function StudentModule({
     bulkDeleting,
     setBulkDeleting,
   ] = useState(false);
+
+  const sectionStudentCounts = useMemo(() => {
+    const counts = new Map();
+
+    students.forEach((student) => {
+      if (!student.section_id) return;
+
+      counts.set(
+        student.section_id,
+        (counts.get(student.section_id) || 0) + 1,
+      );
+    });
+
+    return counts;
+  }, [students]);
+
   useEffect(() => {
     let active = true;
     async function loadSections() {
@@ -2055,8 +2215,8 @@ export default function StudentModule({
           )}
           <BulkStudentForm
             sections={sections}
-            sectionsLoading={
-              sectionsLoading
+            sectionStudentCounts={
+              sectionStudentCounts
             }
             onCancel={closeModal}
             onSave={
@@ -2081,8 +2241,8 @@ export default function StudentModule({
               key={selected.id}
               initialData={selected}
               sections={sections}
-              sectionsLoading={
-                sectionsLoading
+              sectionStudentCounts={
+                sectionStudentCounts
               }
               onCancel={
                 closeModal

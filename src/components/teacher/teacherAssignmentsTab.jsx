@@ -60,6 +60,7 @@ const types = {
 
 const emptyForm = {
   activity_type: "assignment",
+  custom_activity_type: "",
   grading_period: "1",
   title: "",
   instructions: "",
@@ -74,6 +75,27 @@ const gradingPeriods = [
   { value: "3", label: "3rd Grading" },
   { value: "4", label: "4th Grading" },
 ];
+
+const otherType = {
+  label: "Other",
+  icon: ListChecks,
+  badge: "bg-teal-100 text-teal-700",
+  iconStyle: "bg-teal-50 text-teal-600",
+};
+
+function getActivityType(activity) {
+  if (activity.custom_activity_type?.trim()) {
+    return {
+      ...otherType,
+      label: activity.custom_activity_type.trim(),
+    };
+  }
+
+  return (
+    types[activity.activity_type] ||
+    types.assignment
+  );
+}
 
 function gradingLabel(value) {
   return gradingPeriods.find(
@@ -141,7 +163,7 @@ function dueState(value) {
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <h2 className="font-bold text-gray-900">{title}</h2>
           <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-50" aria-label="Close">
@@ -180,7 +202,14 @@ function ActivityForm({
     initialData
       ? {
         activity_type:
-          initialData.activity_type,
+          initialData.custom_activity_type
+            ? "other"
+            : initialData.activity_type ||
+            "assignment",
+
+        custom_activity_type:
+          initialData.custom_activity_type || "",
+
         grading_period: String(
           initialData.grading_period || 1,
         ),
@@ -311,6 +340,9 @@ function ActivityForm({
   function submit(event) {
     event.preventDefault();
 
+    const customActivityType =
+      form.custom_activity_type.trim();
+
     if (
       !form.title.trim() ||
       !form.due_at ||
@@ -320,8 +352,32 @@ function ActivityForm({
       return;
     }
 
+    if (
+      form.activity_type === "other" &&
+      (customActivityType.length < 2 ||
+        customActivityType.length > 50)
+    ) {
+      setFileError(
+        "Custom activity type must contain between 2 and 50 characters.",
+      );
+      return;
+    }
+
     onSave({
-      activity_type: form.activity_type,
+      /*
+       * Custom activities are stored as assignments
+       * internally so existing gradebook rules and
+       * database constraints continue to work.
+       */
+      activity_type:
+        form.activity_type === "other"
+          ? "assignment"
+          : form.activity_type,
+
+      custom_activity_type:
+        form.activity_type === "other"
+          ? customActivityType
+          : null,
       grading_period: Number(
         form.grading_period,
       ),
@@ -359,12 +415,18 @@ function ActivityForm({
         <select
           className={inputClass}
           value={form.activity_type}
-          onChange={(event) =>
-            update(
-              "activity_type",
-              event.target.value,
-            )
-          }
+          onChange={(event) => {
+            const nextType = event.target.value;
+
+            setForm((current) => ({
+              ...current,
+              activity_type: nextType,
+              custom_activity_type:
+                nextType === "other"
+                  ? current.custom_activity_type
+                  : "",
+            }));
+          }}
           required
         >
           <option value="assignment">
@@ -378,8 +440,36 @@ function ActivityForm({
           <option value="quiz">
             Quiz
           </option>
+
+          <option value="other">
+            Other
+          </option>
         </select>
       </Field>
+
+      {form.activity_type === "other" && (
+        <Field label="Custom activity type" required>
+          <input
+            className={inputClass}
+            value={form.custom_activity_type}
+            onChange={(event) =>
+              update(
+                "custom_activity_type",
+                event.target.value,
+              )
+            }
+            placeholder="Example: Laboratory Activity"
+            minLength={2}
+            maxLength={50}
+            required
+          />
+
+          <p className="mt-1 text-xs text-gray-400">
+            Enter the activity category that students
+            will see.
+          </p>
+        </Field>
+      )}
 
       <Field label="Grading period" required>
         <select
@@ -709,9 +799,7 @@ function ActivityCard({
   onManageQuiz,
   deleting,
 }) {
-  const type =
-    types[activity.activity_type] ||
-    types.assignment;
+  const type = getActivityType(activity);
 
   const TypeIcon = type.icon;
   const due = dueState(activity.due_at);
@@ -914,9 +1002,16 @@ export default function TeacherAssignmentsTab({ classRecord }) {
 
   const visibleActivities = useMemo(
     () => activities.filter((item) => {
+      const isOther = Boolean(
+        item.custom_activity_type?.trim(),
+      );
+
       const matchesType =
         typeFilter === "all" ||
-        item.activity_type === typeFilter;
+        (typeFilter === "other" && isOther) ||
+        (typeFilter !== "other" &&
+          !isOther &&
+          item.activity_type === typeFilter);
       const matchesGrading =
         gradingFilter === "all" ||
         Number(item.grading_period) === Number(gradingFilter);
@@ -924,12 +1019,35 @@ export default function TeacherAssignmentsTab({ classRecord }) {
     }),
     [activities, typeFilter, gradingFilter],
   );
-  const counts = useMemo(() => ({
-    all: activities.length,
-    assignment: activities.filter((item) => item.activity_type === "assignment").length,
-    performance_task: activities.filter((item) => item.activity_type === "performance_task").length,
-    quiz: activities.filter((item) => item.activity_type === "quiz").length,
-  }), [activities]);
+  const counts = useMemo(
+    () => ({
+      all: activities.length,
+
+      assignment: activities.filter(
+        (item) =>
+          item.activity_type === "assignment" &&
+          !item.custom_activity_type?.trim(),
+      ).length,
+
+      performance_task: activities.filter(
+        (item) =>
+          item.activity_type ===
+          "performance_task" &&
+          !item.custom_activity_type?.trim(),
+      ).length,
+
+      quiz: activities.filter(
+        (item) =>
+          item.activity_type === "quiz" &&
+          !item.custom_activity_type?.trim(),
+      ).length,
+
+      other: activities.filter((item) =>
+        Boolean(item.custom_activity_type?.trim()),
+      ).length,
+    }),
+    [activities],
+  );
 
   function closeModal() {
     if (saving) return;
@@ -997,6 +1115,25 @@ export default function TeacherAssignmentsTab({ classRecord }) {
       selectedStudentIds,
       ...databaseValues
     } = values;
+
+    /*
+ * Keep the old status column and the new
+ * publication_status column synchronized.
+ *
+ * This supports the existing student queries
+ * that still use status while notification
+ * triggers use publication_status.
+ */
+    const selectedPublicationStatus =
+      values.publication_status ||
+      values.status ||
+      "draft";
+
+    databaseValues.status =
+      selectedPublicationStatus;
+
+    databaseValues.publication_status =
+      selectedPublicationStatus;
 
     const oldPath =
       selected?.file_path || null;
@@ -1262,7 +1399,13 @@ export default function TeacherAssignmentsTab({ classRecord }) {
       {pageError && <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{pageError}</div>}
 
       <div className="flex flex-wrap gap-2">
-        {[["all", "All"], ["assignment", "Assignments"], ["performance_task", "Performance Tasks"], ["quiz", "Quizzes"]].map(([value, label]) => (
+        {[
+          ["all", "All"],
+          ["assignment", "Assignments"],
+          ["performance_task", "Performance Tasks"],
+          ["quiz", "Quizzes"],
+          ["other", "Other"],
+        ].map(([value, label]) => (
           <button key={value} type="button" onClick={() => setTypeFilter(value)} className={`rounded-full px-3 py-1.5 text-xs font-medium ${typeFilter === value ? "bg-slate-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{label} ({counts[value]})</button>
         ))}
       </div>

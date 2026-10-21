@@ -1,44 +1,19 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   Bell,
   CheckCheck,
   ChevronDown,
+  LoaderCircle,
   LogOut,
   Menu,
   Megaphone,
   Settings,
   User,
 } from "lucide-react";
-
-const initialNotifications = [
-  {
-    id: 1,
-    title: "New school announcement",
-    message:
-      "A new school announcement is available.",
-    time: "Just now",
-    read: false,
-    view: "announcements",
-  },
-  {
-    id: 2,
-    title: "Check your assignments",
-    message:
-      "You may have upcoming activities and deadlines.",
-    time: "Today",
-    read: false,
-    view: "assignments",
-  },
-  {
-    id: 3,
-    title: "Welcome to ELP-AMP",
-    message:
-      "View your classes, activities, and school updates.",
-    time: "Today",
-    read: false,
-    view: "dashboard",
-  },
-];
 
 function getInitials(name) {
   if (!name) return "ST";
@@ -66,8 +41,60 @@ function getStudentDescription(studentProfile) {
   return "Student";
 }
 
+function formatNotificationDate(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  const now = new Date();
+  const difference =
+    now.getTime() - date.getTime();
+
+  const minutes = Math.floor(
+    difference / 60000,
+  );
+
+  const hours = Math.floor(
+    difference / 3600000,
+  );
+
+  const days = Math.floor(
+    difference / 86400000,
+  );
+
+  if (minutes < 1) {
+    return "Just now";
+  }
+
+  if (minutes < 60) {
+    return `${minutes} minute${minutes === 1 ? "" : "s"
+      } ago`;
+  }
+
+  if (hours < 24) {
+    return `${hours} hour${hours === 1 ? "" : "s"
+      } ago`;
+  }
+
+  if (days < 7) {
+    return `${days} day${days === 1 ? "" : "s"
+      } ago`;
+  }
+
+  return date.toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export default function StudentHeader({
   studentProfile,
+  notifications = [],
+  notificationCount = 0,
+  notificationsLoading = false,
+  notificationsError = "",
+  onOpenNotification,
+  onMarkAllNotificationsRead,
   onOpenSidebar,
   onSelectView,
   onLogout,
@@ -77,51 +104,59 @@ export default function StudentHeader({
     setNotificationsOpen,
   ] = useState(false);
 
-  const [notifications, setNotifications] =
-    useState(initialNotifications);
+  const notificationRef = useRef(null);
 
-  const unreadCount =
-    notifications.filter(
-      (notification) => !notification.read,
-    ).length;
+  useEffect(() => {
+    function handleOutsideClick(event) {
+      if (
+        notificationRef.current &&
+        !notificationRef.current.contains(
+          event.target,
+        )
+      ) {
+        setNotificationsOpen(false);
+      }
+    }
 
-  function toggleNotifications() {
-    setNotificationsOpen(
-      (current) => !current,
-    );
-  }
-
-  function openNotification(notification) {
-    setNotifications((current) =>
-      current.map((item) =>
-        item.id === notification.id
-          ? {
-              ...item,
-              read: true,
-            }
-          : item,
-      ),
+    document.addEventListener(
+      "mousedown",
+      handleOutsideClick,
     );
 
-    setNotificationsOpen(false);
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleOutsideClick,
+      );
+    };
+  }, []);
 
-    if (notification.view) {
-      onSelectView(notification.view);
+  async function handleNotificationClick(
+    notification,
+  ) {
+    try {
+      await onOpenNotification?.(
+        notification,
+      );
+
+      setNotificationsOpen(false);
+    } catch (error) {
+      console.error(
+        "Unable to open notification:",
+        error,
+      );
     }
   }
 
-  function markAllAsRead() {
-    setNotifications((current) =>
-      current.map((notification) => ({
-        ...notification,
-        read: true,
-      })),
-    );
-  }
-
-  function clearNotifications() {
-    setNotifications([]);
-    setNotificationsOpen(false);
+  async function handleMarkAllAsRead() {
+    try {
+      await onMarkAllNotificationsRead?.();
+    } catch (error) {
+      console.error(
+        "Unable to mark notifications as read:",
+        error,
+      );
+    }
   }
 
   return (
@@ -136,181 +171,177 @@ export default function StudentHeader({
       </button>
 
       <div className="ml-auto flex items-center gap-3 sm:gap-5">
-        {/* Notification button and dropdown */}
-        <div className="relative">
+        {/* Notification bell */}
+        <div
+          ref={notificationRef}
+          className="relative"
+        >
           <button
             type="button"
-            onClick={toggleNotifications}
-            className={`relative rounded-lg p-2 transition-colors ${
-              notificationsOpen
+            onClick={() =>
+              setNotificationsOpen(
+                (current) => !current,
+              )
+            }
+            className={`relative rounded-lg p-2 transition-colors ${notificationsOpen
                 ? "bg-blue-50 text-blue-600"
                 : "text-gray-500 hover:bg-gray-50"
-            }`}
-            aria-label="View notifications"
-            aria-expanded={
-              notificationsOpen
-            }
-            aria-haspopup="menu"
+              }`}
+            aria-label="Open notifications"
+            aria-expanded={notificationsOpen}
           >
             <Bell className="h-5 w-5" />
 
-            {unreadCount > 0 && (
+            {notificationCount > 0 && (
               <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium text-white">
-                {Math.min(unreadCount, 9)}
-                {unreadCount > 9 ? "+" : ""}
+                {notificationCount > 9
+                  ? "9+"
+                  : notificationCount}
               </span>
             )}
           </button>
 
           {notificationsOpen && (
-            <>
-              <button
-                type="button"
-                onClick={() =>
-                  setNotificationsOpen(false)
-                }
-                aria-label="Close notifications"
-                className="fixed inset-0 z-40 cursor-default"
-              />
+            <div className="absolute right-0 top-full z-50 mt-2 w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
+              <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+                <div>
+                  <h2 className="font-semibold text-gray-900">
+                    Notifications
+                  </h2>
 
-              <div
-                role="menu"
-                className="absolute right-0 top-full z-50 mt-2 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-gray-100 bg-white shadow-xl"
-              >
-                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                  <div>
-                    <h2 className="font-semibold text-gray-900">
-                      Notifications
-                    </h2>
-
-                    <p className="text-xs text-gray-400">
-                      {unreadCount > 0
-                        ? `${unreadCount} unread notification${
-                            unreadCount === 1
-                              ? ""
-                              : "s"
-                          }`
-                        : "You are all caught up"}
-                    </p>
-                  </div>
-
-                  {unreadCount > 0 && (
-                    <button
-                      type="button"
-                      onClick={markAllAsRead}
-                      className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50"
-                    >
-                      <CheckCheck className="h-4 w-4" />
-                      Mark all read
-                    </button>
-                  )}
+                  <p className="text-xs text-gray-400">
+                    {notificationCount} unread
+                  </p>
                 </div>
 
-                {notifications.length === 0 ? (
-                  <div className="px-5 py-10 text-center">
-                    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-gray-100">
-                      <Bell className="h-5 w-5 text-gray-400" />
-                    </div>
+                {notificationCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={
+                      handleMarkAllAsRead
+                    }
+                    className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:underline"
+                  >
+                    <CheckCheck className="h-4 w-4" />
+                    Mark all read
+                  </button>
+                )}
+              </div>
 
-                    <p className="mt-3 text-sm font-medium text-gray-700">
-                      No notifications
-                    </p>
-
-                    <p className="mt-1 text-xs text-gray-400">
-                      New notifications will appear
-                      here.
-                    </p>
+              <div className="max-h-[420px] overflow-y-auto">
+                {notificationsLoading && (
+                  <div className="flex items-center justify-center gap-2 px-4 py-10 text-sm text-gray-400">
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                    Loading notifications...
                   </div>
-                ) : (
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifications.map(
-                      (notification) => (
-                        <button
-                          key={notification.id}
-                          type="button"
-                          role="menuitem"
-                          onClick={() =>
-                            openNotification(
-                              notification,
-                            )
-                          }
-                          className={`flex w-full items-start gap-3 border-b border-gray-50 px-4 py-3 text-left transition-colors last:border-b-0 ${
-                            notification.read
-                              ? "bg-white hover:bg-gray-50"
-                              : "bg-blue-50/60 hover:bg-blue-50"
+                )}
+
+                {!notificationsLoading &&
+                  notificationsError && (
+                    <div className="m-4 rounded-lg border border-red-100 bg-red-50 p-3 text-sm text-red-600">
+                      {notificationsError}
+                    </div>
+                  )}
+
+                {!notificationsLoading &&
+                  !notificationsError &&
+                  notifications.length ===
+                  0 && (
+                    <div className="px-5 py-10 text-center">
+                      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-gray-100">
+                        <Bell className="h-5 w-5 text-gray-400" />
+                      </div>
+
+                      <p className="mt-3 text-sm font-medium text-gray-700">
+                        No notifications
+                      </p>
+
+                      <p className="mt-1 text-xs text-gray-400">
+                        New activities will
+                        appear here.
+                      </p>
+                    </div>
+                  )}
+
+                {!notificationsLoading &&
+                  !notificationsError &&
+                  notifications.map(
+                    (notification) => (
+                      <button
+                        key={
+                          notification.id
+                        }
+                        type="button"
+                        onClick={() =>
+                          handleNotificationClick(
+                            notification,
+                          )
+                        }
+                        className={`flex w-full items-start gap-3 border-b border-gray-50 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 ${notification.is_read
+                            ? "bg-white"
+                            : "bg-blue-50/60"
                           }`}
-                        >
-                          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100">
-                            <Megaphone className="h-4 w-4 text-blue-600" />
-                          </div>
+                      >
+                        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100">
+                          <Megaphone className="h-4 w-4 text-blue-600" />
 
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start gap-2">
-                              <p className="flex-1 text-sm font-medium text-gray-900">
-                                {
-                                  notification.title
-                                }
-                              </p>
+                          {!notification.is_read && (
+                            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-blue-600" />
+                          )}
+                        </div>
 
-                              {!notification.read && (
-                                <span
-                                  className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-600"
-                                  aria-label="Unread"
-                                />
-                              )}
-                            </div>
-
-                            <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-gray-500">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <p
+                              className={`text-sm text-gray-900 ${notification.is_read
+                                  ? "font-medium"
+                                  : "font-semibold"
+                                }`}
+                            >
                               {
-                                notification.message
+                                notification.title
                               }
                             </p>
 
-                            <p className="mt-1 text-[11px] text-gray-400">
-                              {notification.time}
-                            </p>
+                            {!notification.is_read && (
+                              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
+                            )}
                           </div>
-                        </button>
-                      ),
-                    )}
-                  </div>
-                )}
 
-                {notifications.length > 0 && (
-                  <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNotificationsOpen(
-                          false,
-                        );
+                          <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-gray-500">
+                            {
+                              notification.message
+                            }
+                          </p>
 
-                        onSelectView(
-                          "announcements",
-                        );
-                      }}
-                      className="text-xs font-medium text-blue-600 hover:underline"
-                    >
-                      View announcements
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={
-                        clearNotifications
-                      }
-                      className="text-xs font-medium text-gray-400 hover:text-red-600"
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                )}
+                          <p className="mt-1 text-[11px] text-gray-400">
+                            {formatNotificationDate(
+                              notification.created_at,
+                            )}
+                          </p>
+                        </div>
+                      </button>
+                    ),
+                  )}
               </div>
-            </>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setNotificationsOpen(false);
+                  onSelectView?.(
+                    "assignments",
+                  );
+                }}
+                className="w-full border-t border-gray-100 px-4 py-3 text-center text-sm font-medium text-blue-600 hover:bg-blue-50"
+              >
+                View all activities
+              </button>
+            </div>
           )}
         </div>
 
-        {/* Student account dropdown */}
+        {/* Student account menu */}
         <div className="group relative">
           <button
             type="button"
@@ -336,13 +367,10 @@ export default function StudentHeader({
               </p>
             </div>
 
-            <ChevronDown className="hidden h-4 w-4 text-gray-400 transition-transform duration-150 group-hover:rotate-180 group-focus-within:rotate-180 sm:block" />
+            <ChevronDown className="hidden h-4 w-4 text-gray-400 transition-transform group-hover:rotate-180 group-focus-within:rotate-180 sm:block" />
           </button>
 
-          <div
-            role="menu"
-            className="invisible absolute right-0 top-full z-50 w-56 translate-y-1 pt-2 opacity-0 transition-all duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
-          >
+          <div className="invisible absolute right-0 top-full z-50 w-56 translate-y-1 pt-2 opacity-0 transition-all group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
             <div className="rounded-xl border border-gray-100 bg-white py-1.5 shadow-lg">
               <div className="border-b border-gray-100 px-4 py-3">
                 <p className="truncate text-sm font-medium text-gray-800">
@@ -368,7 +396,7 @@ export default function StudentHeader({
                 type="button"
                 role="menuitem"
                 onClick={() =>
-                  onSelectView("profile")
+                  onSelectView?.("profile")
                 }
                 className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
               >
@@ -380,7 +408,7 @@ export default function StudentHeader({
                 type="button"
                 role="menuitem"
                 onClick={() =>
-                  onSelectView("settings")
+                  onSelectView?.("settings")
                 }
                 className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
               >

@@ -9,6 +9,7 @@ import {
   Bell,
   ChevronDown,
   LayoutDashboard,
+  ScrollText,
   Users,
   UsersRound,
   GraduationCap,
@@ -30,12 +31,15 @@ import TeachingAssignmentModule from "../components/admin/teachingAssignmentModu
 import SectionRosterModule from "../components/admin/sectionRosterModule";
 import ArchivedStudentsModule from "../components/admin/archivedStudentsModule";
 import ArchivedTeachersModule from "../components/admin/archivedTeachersModule";
+import AdminAuditLogs from "../components/admin/adminAuditLogs";
 
 import {
   Field,
   inputClass,
   Modal,
+  PasswordInput,
   RowActions,
+  SectionHeader,
   StatusBadge,
 } from "../components/admin/adminUI";
 
@@ -115,7 +119,11 @@ function getAdminNotificationStyle(type) {
 }
 
 const sidebarItems = [
-  { key: "dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  {
+    key: "dashboard",
+    icon: LayoutDashboard,
+    label: "Dashboard",
+  },
   {
     key: "academic",
     icon: BookOpen,
@@ -127,12 +135,30 @@ const sidebarItems = [
     icon: UsersRound,
   },
   {
-    key: "teaching_assignments", icon: BookUser, label: "Teaching Assignments",
+    key: "teaching_assignments",
+    icon: BookUser,
+    label: "Teaching Assignments",
   },
-  { key: "teachers", icon: Users, label: "Teachers" },
-  { key: "students", icon: GraduationCap, label: "Students" },
-  { key: "announcements", icon: Megaphone, label: "Announcements" },
-  { key: "admins", icon: UserCog, label: "Admins" },
+  {
+    key: "teachers",
+    icon: Users,
+    label: "Teachers",
+  },
+  {
+    key: "students",
+    icon: GraduationCap,
+    label: "Students",
+  },
+  {
+    key: "announcements",
+    icon: Megaphone,
+    label: "Announcements",
+  },
+  {
+    key: "admins",
+    icon: UserCog,
+    label: "Admins",
+  },
 ];
 
 function getInitials(name) {
@@ -232,20 +258,25 @@ function AdminForm({
             : "Password"
         }
       >
-        <input
-          className={inputClass}
-          type="password"
+        <PasswordInput
+          id="admin-password"
           value={form.password}
           onChange={(event) =>
-            update("password", event.target.value)
+            update(
+              "password",
+              event.target.value,
+            )
           }
           placeholder={
             isEditing
               ? "Leave blank to keep current password"
               : "Minimum 8 characters"
           }
-          minLength={form.password ? 8 : undefined}
+          minLength={
+            form.password ? 8 : undefined
+          }
           required={!isEditing}
+          disabled={saving}
         />
       </Field>
 
@@ -703,6 +734,18 @@ export default function AdminDashboard() {
   const [dashboardError, setDashboardError] = useState("");
   const canDelete =
     adminProfile?.role === "super_admin";
+
+  const visibleSidebarItems =
+    adminProfile?.role === "super_admin"
+      ? [
+        ...sidebarItems,
+        {
+          key: "audit_logs",
+          label: "Audit Logs",
+          icon: ScrollText,
+        },
+      ]
+      : sidebarItems;
 
   const [
     notifications,
@@ -1300,20 +1343,21 @@ export default function AdminDashboard() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {sidebarItems.map(({ key, icon: Icon, label }) => (
-            <button
-              type="button"
-              key={key}
-              onClick={() => setActiveView(key)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeView === key
-                ? "bg-white/15 text-white"
-                : "text-blue-100 hover:bg-white/10 hover:text-white"
-                }`}
-            >
-              <Icon className="w-[18px] h-[18px]" />
-              {label}
-            </button>
-          ))}
+          {visibleSidebarItems.map(
+            ({ key, icon: Icon, label }) => (
+              <button
+                type="button"
+                key={key}
+                onClick={() => setActiveView(key)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeView === key
+                  ? "bg-white/15 text-white"
+                  : "text-blue-100 hover:bg-white/10 hover:text-white"
+                  }`}
+              >
+                <Icon className="w-[18px] h-[18px]" />
+                {label}
+              </button>
+            ))}
         </nav>
       </aside>
 
@@ -1673,6 +1717,23 @@ export default function AdminDashboard() {
               error={adminsError}
               currentAdmin={adminProfile}
             />
+          )}
+
+          {activeView === "audit_logs" && (
+            <>
+              {adminProfile?.role ===
+                "super_admin" ? (
+                <AdminAuditLogs />
+              ) : (
+                <div
+                  role="alert"
+                  className="rounded-xl border border-red-100 bg-red-50 p-5 text-sm text-red-700"
+                >
+                  Only a super administrator can
+                  view admin audit logs.
+                </div>
+              )}
+            </>
           )}
         </main>
       </div>
