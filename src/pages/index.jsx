@@ -1,6 +1,10 @@
 // src/pages/school-login.jsx
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Mail,
@@ -20,6 +24,9 @@ const roleRoutes = {
 
 export default function SchoolLogin() {
   const navigate = useNavigate();
+
+  const logoClickCount = useRef(0);
+  const logoClickTimer = useRef(null);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -120,7 +127,7 @@ export default function SchoolLogin() {
         if (active) {
           setError(
             sessionCheckError.message ||
-              "Unable to check your current session.",
+            "Unable to check your current session.",
           );
         }
       } finally {
@@ -134,6 +141,12 @@ export default function SchoolLogin() {
 
     return () => {
       active = false;
+
+      if (logoClickTimer.current) {
+        window.clearTimeout(
+          logoClickTimer.current,
+        );
+      }
     };
   }, []);
 
@@ -192,7 +205,7 @@ export default function SchoolLogin() {
       } else {
         setError(
           loginError.message ||
-            "Unable to sign in. Please try again.",
+          "Unable to sign in. Please try again.",
         );
       }
     } finally {
@@ -217,6 +230,42 @@ export default function SchoolLogin() {
     );
   }
 
+  function handleLogoClick() {
+    logoClickCount.current += 1;
+
+    /*
+     * Restart the four-second countdown every
+     * time the logo is clicked.
+     */
+    if (logoClickTimer.current) {
+      window.clearTimeout(
+        logoClickTimer.current,
+      );
+    }
+
+    /*
+     * Open the Admin Console after exactly
+     * eight consecutive clicks.
+     */
+    if (logoClickCount.current >= 8) {
+      logoClickCount.current = 0;
+
+      navigate("/admin/login");
+
+      return;
+    }
+
+    /*
+     * Reset the counter when the user does not
+     * complete eight clicks within four seconds.
+     */
+    logoClickTimer.current =
+      window.setTimeout(() => {
+        logoClickCount.current = 0;
+        logoClickTimer.current = null;
+      }, 4000);
+  }
+
   return (
     <div
       className="relative flex min-h-screen items-center justify-center bg-cover bg-center p-4"
@@ -226,21 +275,21 @@ export default function SchoolLogin() {
     >
       <div className="absolute inset-0 bg-black/50" />
 
-      <button
-        type="button"
-        onClick={() => navigate("/admin/login")}
-        className="absolute right-6 top-6 z-10 text-sm text-white underline underline-offset-4 transition-colors hover:text-gray-200"
-      >
-        Admin Console
-      </button>
-
       <div className="relative w-full max-w-md">
         <div className="mb-8 flex flex-col items-center">
-          <img
-            src={logo}
-            alt="EJIST logo"
-            className="mb-3 h-36 w-36 object-contain"
-          />
+          <button
+            type="button"
+            onClick={handleLogoClick}
+            className="mb-3 rounded-full focus:outline-none"
+            aria-label="EJIST school logo"
+          >
+            <img
+              src={logo}
+              alt="EJIST logo"
+              draggable="false"
+              className="h-36 w-36 select-none object-contain"
+            />
+          </button>
 
           <h1 className="text-2xl font-bold text-white">
             ELP-AMP

@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Clock,
   RefreshCw,
+  Sparkles,
   Trophy,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
@@ -156,9 +157,9 @@ function MiniCalendar() {
 
   const showingCurrentMonth =
     visibleMonth.getFullYear() ===
-      today.getFullYear() &&
+    today.getFullYear() &&
     visibleMonth.getMonth() ===
-      today.getMonth();
+    today.getMonth();
 
   function changeMonth(amount) {
     setVisibleMonth((current) => {
@@ -251,16 +252,15 @@ function MiniCalendar() {
           const isToday =
             showingCurrentMonth &&
             calendarDay.day ===
-              today.getDate();
+            today.getDate();
 
           return (
             <div
               key={calendarDay.key}
-              className={`flex h-9 items-center justify-center rounded-lg text-xs ${
-                isToday
-                  ? "bg-blue-600 font-bold text-white"
-                  : "text-gray-600 hover:bg-blue-50"
-              }`}
+              className={`flex h-9 items-center justify-center rounded-lg text-xs ${isToday
+                ? "bg-blue-600 font-bold text-white"
+                : "text-gray-600 hover:bg-blue-50"
+                }`}
             >
               {calendarDay.day}
             </div>
@@ -374,7 +374,7 @@ function UpcomingActivities({
 
       setError(
         loadError.message ||
-          "Unable to load upcoming activities.",
+        "Unable to load upcoming activities.",
       );
 
       setActivities([]);
@@ -421,9 +421,8 @@ function UpcomingActivities({
           className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw
-            className={`h-4 w-4 ${
-              loading ? "animate-spin" : ""
-            }`}
+            className={`h-4 w-4 ${loading ? "animate-spin" : ""
+              }`}
           />
         </button>
       </div>
@@ -631,32 +630,66 @@ export default function TeacherDashboardHome({
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
       <div className="min-w-0 space-y-6">
-        <div className="rounded-2xl bg-blue-600 p-6 text-white">
-          <p className="text-sm text-blue-100">
-            Teacher Dashboard
-          </p>
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-800 via-blue-700 to-cyan-500 p-6 text-white shadow-xl shadow-blue-200/40 sm:p-7">
+          <div
+            aria-hidden="true"
+            className="absolute -right-20 -top-24 h-72 w-72 rounded-full border-[38px] border-white/10"
+          />
 
-          <h1 className="mt-1 text-2xl font-bold">
-            Welcome back,{" "}
-            {teacherProfile?.full_name ||
-              "Teacher"}
-            !
-          </h1>
+          <div
+            aria-hidden="true"
+            className="absolute -bottom-28 left-[35%] h-64 w-64 rounded-full bg-white/10"
+          />
 
-          <p className="mt-2 text-sm text-blue-100">
-            View your assigned subjects,
-            sections, and school announcements.
-          </p>
+          <div
+            aria-hidden="true"
+            className="absolute right-[32%] top-6 h-20 w-20 rounded-full bg-cyan-300/10 blur-xl"
+          />
 
-          {teacherProfile?.teacher_number && (
-            <p className="mt-4 text-xs text-blue-100">
-              Teacher number:{" "}
-              {
-                teacherProfile.teacher_number
-              }
-            </p>
-          )}
-        </div>
+          <div className="relative flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
+            <div className="max-w-2xl">
+              <div className="flex w-fit items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-blue-50 backdrop-blur">
+                <Sparkles className="h-3.5 w-3.5" />
+                Teacher Dashboard
+              </div>
+
+              <h1 className="mt-4 text-2xl font-extrabold tracking-tight sm:text-3xl">
+                Welcome back
+              </h1>
+
+              <p className="mt-2 max-w-xl text-sm leading-6 text-blue-100">
+                View your assigned subjects, sections, upcoming
+                activities, and school announcements.
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                <span className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold backdrop-blur">
+                  {teacherProfile?.teacher_number ||
+                    "No teacher number"}
+                </span>
+
+                <span className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold backdrop-blur">
+                  {classes.length} assigned{" "}
+                  {classes.length === 1
+                    ? "class"
+                    : "classes"}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-3xl border-4 border-white/30 bg-white/15 text-3xl font-extrabold shadow-xl backdrop-blur sm:h-28 sm:w-28">
+              {String(
+                teacherProfile?.full_name || "Teacher",
+              )
+                .trim()
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((part) => part.charAt(0))
+                .join("")
+                .toUpperCase()}
+            </div>
+          </div>
+        </section>
 
         <section>
           <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
@@ -692,7 +725,7 @@ export default function TeacherDashboardHome({
           {!loading &&
             !error &&
             classes.length >
-              CLASSES_PER_PAGE && (
+            CLASSES_PER_PAGE && (
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
                 <p className="text-sm text-gray-500">
                   Showing{" "}
@@ -705,7 +738,7 @@ export default function TeacherDashboardHome({
                   <span className="font-medium text-gray-700">
                     {Math.min(
                       currentPage *
-                        CLASSES_PER_PAGE,
+                      CLASSES_PER_PAGE,
                       classes.length,
                     )}
                   </span>{" "}

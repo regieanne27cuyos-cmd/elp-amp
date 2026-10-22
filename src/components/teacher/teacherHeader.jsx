@@ -193,24 +193,6 @@ export default function TeacherHeader({
         <Menu className="h-5 w-5" />
       </button>
 
-      <div className="relative hidden max-w-xl flex-1 sm:block">
-        <label
-          htmlFor="teacher-search"
-          className="sr-only"
-        >
-          Search teacher dashboard
-        </label>
-
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-
-        <input
-          id="teacher-search"
-          type="search"
-          placeholder="Search classes, students, assignments..."
-          className="w-full rounded-lg border border-transparent bg-gray-50 py-2 pl-9 pr-4 text-sm outline-none focus:border-gray-200 focus:bg-white"
-        />
-      </div>
-
       <div className="ml-auto flex items-center gap-3 sm:gap-5">
         {/* Notification dropdown */}
         <div className="relative">
