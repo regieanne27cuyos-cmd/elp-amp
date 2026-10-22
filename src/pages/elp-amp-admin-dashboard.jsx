@@ -3,10 +3,6 @@ import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
   BookUser,
-  ShieldCheck,
-  CheckCheck,
-  ClipboardList,
-  Bell,
   ChevronDown,
   LayoutDashboard,
   ScrollText,
@@ -17,9 +13,8 @@ import {
   UserCog,
   LogOut,
   Plus,
-  Pencil,
-  Trash2,
-  X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -32,6 +27,7 @@ import SectionRosterModule from "../components/admin/sectionRosterModule";
 import ArchivedStudentsModule from "../components/admin/archivedStudentsModule";
 import ArchivedTeachersModule from "../components/admin/archivedTeachersModule";
 import AdminAuditLogs from "../components/admin/adminAuditLogs";
+import logo from "../assets/ejist-primary-logo.png";
 
 import {
   Field,
@@ -39,84 +35,8 @@ import {
   Modal,
   PasswordInput,
   RowActions,
-  SectionHeader,
   StatusBadge,
 } from "../components/admin/adminUI";
-
-const initialAdminNotifications = [
-  {
-    id: "admin-notification-1",
-    type: "student",
-    title: "New student account",
-    message:
-      "A new student account was recently added to the system.",
-    time: "10 minutes ago",
-    view: "students",
-    read: false,
-  },
-  {
-    id: "admin-notification-2",
-    type: "teacher",
-    title: "Teacher account updated",
-    message:
-      "A teacher account was recently updated.",
-    time: "30 minutes ago",
-    view: "teachers",
-    read: false,
-  },
-  {
-    id: "admin-notification-3",
-    type: "assignment",
-    title: "Teaching assignment created",
-    message:
-      "A teacher was assigned to a subject and section.",
-    time: "1 hour ago",
-    view: "teaching_assignments",
-    read: false,
-  },
-  {
-    id: "admin-notification-4",
-    type: "announcement",
-    title: "Announcement published",
-    message:
-      "A school announcement is currently active.",
-    time: "Yesterday",
-    view: "announcements",
-    read: true,
-  },
-];
-
-function getAdminNotificationStyle(type) {
-  if (type === "student") {
-    return {
-      icon: GraduationCap,
-      containerClass: "bg-green-100",
-      iconClass: "text-green-600",
-    };
-  }
-
-  if (type === "teacher") {
-    return {
-      icon: Users,
-      containerClass: "bg-purple-100",
-      iconClass: "text-purple-600",
-    };
-  }
-
-  if (type === "assignment") {
-    return {
-      icon: ClipboardList,
-      containerClass: "bg-orange-100",
-      iconClass: "text-orange-600",
-    };
-  }
-
-  return {
-    icon: Megaphone,
-    containerClass: "bg-blue-100",
-    iconClass: "text-blue-600",
-  };
-}
 
 const sidebarItems = [
   {
@@ -729,6 +649,10 @@ export default function AdminDashboard() {
 
   //admin
   const [activeView, setActiveView] = useState("dashboard");
+  const [
+    sidebarCollapsed,
+    setSidebarCollapsed,
+  ] = useState(false);
   const [adminProfile, setAdminProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState("");
@@ -746,68 +670,6 @@ export default function AdminDashboard() {
         },
       ]
       : sidebarItems;
-
-  const [
-    notifications,
-    setNotifications,
-  ] = useState(initialAdminNotifications);
-
-  const [
-    notificationsOpen,
-    setNotificationsOpen,
-  ] = useState(false);
-
-  const unreadNotificationCount =
-    notifications.filter(
-      (notification) => !notification.read,
-    ).length;
-
-  function toggleNotifications() {
-    setNotificationsOpen(
-      (current) => !current,
-    );
-  }
-
-  function closeNotifications() {
-    setNotificationsOpen(false);
-  }
-
-  function markNotificationAsRead(
-    notificationId,
-  ) {
-    setNotifications((current) =>
-      current.map((notification) =>
-        notification.id === notificationId
-          ? {
-            ...notification,
-            read: true,
-          }
-          : notification,
-      ),
-    );
-  }
-
-  function markAllNotificationsAsRead() {
-    setNotifications((current) =>
-      current.map((notification) => ({
-        ...notification,
-        read: true,
-      })),
-    );
-  }
-
-  function clearNotifications() {
-    setNotifications([]);
-  }
-
-  function openNotification(notification) {
-    markNotificationAsRead(notification.id);
-    setNotificationsOpen(false);
-
-    if (notification.view) {
-      setActiveView(notification.view);
-    }
-  }
 
   //teacher
   const [teachers, setTeachers] = useState([]);
@@ -1333,204 +1195,210 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex text-gray-900">
-      <aside className="w-60 bg-slate-800 flex flex-col shrink-0">
-        <div className="h-16 flex items-center gap-2 px-5 border-b border-white/15">
-          <ShieldCheck className="w-6 h-6 text-white" />
+      <aside
+        className={`sticky top-0 z-30 flex h-screen shrink-0 flex-col bg-slate-800 text-white shadow-xl transition-[width] duration-300 ease-in-out ${sidebarCollapsed
+          ? "w-[76px]"
+          : "w-60"
+          }`}
+      >
+        {/* Logo */}
+        <div
+          className={`flex h-16 shrink-0 items-center border-b border-white/15 transition-all duration-300 ${sidebarCollapsed
+            ? "justify-center px-2"
+            : "gap-3 px-5"
+            }`}
+        >
+          <button
+            type="button"
+            onClick={() =>
+              setActiveView("dashboard")
+            }
+            aria-label="Go to dashboard"
+            title="Go to dashboard"
+            className="flex shrink-0 items-center justify-center rounded-xl transition hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          >
+            <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white p-1 shadow-sm">
+              <img
+                src={logo}
+                alt="EJIST school logo"
+                className="h-full w-full object-contain"
+              />
+            </div>
+          </button>
 
-          <span className="font-bold text-lg text-white">
-            ELP-AMP Admin
-          </span>
+          <div
+            className={`min-w-0 overflow-hidden whitespace-nowrap transition-all duration-300 ${sidebarCollapsed
+              ? "w-0 opacity-0"
+              : "w-auto opacity-100"
+              }`}
+          >
+            <span className="block truncate text-lg font-bold text-white">
+              ELP-AMP Admin
+            </span>
+          </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {/* Navigation */}
+        <nav
+          className={`min-h-0 flex-1 space-y-1 overflow-y-auto overflow-x-hidden py-4 transition-all duration-300 ${sidebarCollapsed
+            ? "px-2"
+            : "px-3"
+            }`}
+        >
+          {!sidebarCollapsed && (
+            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-200">
+              Main Menu
+            </p>
+          )}
+
           {visibleSidebarItems.map(
-            ({ key, icon: Icon, label }) => (
-              <button
-                type="button"
-                key={key}
-                onClick={() => setActiveView(key)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeView === key
-                  ? "bg-white/15 text-white"
-                  : "text-blue-100 hover:bg-white/10 hover:text-white"
-                  }`}
-              >
-                <Icon className="w-[18px] h-[18px]" />
-                {label}
-              </button>
-            ))}
+            ({ key, icon: Icon, label }) => {
+              const active =
+                activeView === key;
+
+              return (
+                <button
+                  type="button"
+                  key={key}
+                  onClick={() =>
+                    setActiveView(key)
+                  }
+                  aria-current={
+                    active ? "page" : undefined
+                  }
+                  aria-label={
+                    sidebarCollapsed
+                      ? label
+                      : undefined
+                  }
+                  title={
+                    sidebarCollapsed
+                      ? label
+                      : undefined
+                  }
+                  className={`group relative flex w-full items-center rounded-xl py-2.5 text-left text-sm font-medium transition-all duration-200 ${sidebarCollapsed
+                    ? "justify-center px-2"
+                    : "gap-3 px-3"
+                    } ${active
+                      ? "bg-white text-blue-700 shadow-sm"
+                      : "text-blue-100 hover:bg-white/10 hover:text-white"
+                    }`}
+                >
+                  <Icon
+                    className={`h-[18px] w-[18px] shrink-0 transition-colors ${active
+                      ? "text-blue-600"
+                      : "text-blue-200 group-hover:text-white"
+                      }`}
+                  />
+
+                  <span
+                    className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${sidebarCollapsed
+                      ? "w-0 opacity-0"
+                      : "w-auto opacity-100"
+                      }`}
+                  >
+                    {label}
+                  </span>
+
+                  {active &&
+                    !sidebarCollapsed && (
+                      <span
+                        aria-hidden="true"
+                        className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600"
+                      />
+                    )}
+
+                  {/* Tooltip when collapsed */}
+                  {sidebarCollapsed && (
+                    <span className="pointer-events-none absolute left-full z-50 ml-3 hidden whitespace-nowrap rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white opacity-0 shadow-xl transition group-hover:block group-hover:opacity-100">
+                      {label}
+                    </span>
+                  )}
+                </button>
+              );
+            },
+          )}
         </nav>
+
+        {/* Account information */}
+        <div
+          className={`shrink-0 border-t border-white/10 bg-blue-950/30 py-3 transition-all duration-300 ${sidebarCollapsed
+            ? "px-2"
+            : "px-3"
+            }`}
+        >
+          {!sidebarCollapsed && (
+            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-200">
+              Account
+            </p>
+          )}
+
+          <div
+            className={`flex items-center rounded-xl bg-white/10 ${sidebarCollapsed
+              ? "justify-center p-2"
+              : "gap-3 px-3 py-2.5"
+              }`}
+            title={
+              sidebarCollapsed
+                ? adminProfile?.full_name ||
+                "Administrator"
+                : undefined
+            }
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-extrabold text-blue-700">
+              {getInitials(
+                adminProfile?.full_name,
+              )}
+            </div>
+
+            {!sidebarCollapsed && (
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">
+                  {adminProfile?.full_name ||
+                    "Administrator"}
+                </p>
+
+                <p className="truncate text-[11px] text-blue-200">
+                  {formatRole(
+                    adminProfile?.role,
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Middle collapse button */}
+        <button
+          type="button"
+          onClick={() =>
+            setSidebarCollapsed(
+              (current) => !current,
+            )
+          }
+          aria-label={
+            sidebarCollapsed
+              ? "Expand sidebar"
+              : "Collapse sidebar"
+          }
+          title={
+            sidebarCollapsed
+              ? "Expand sidebar"
+              : "Collapse sidebar"
+          }
+          className="absolute -right-3 top-1/2 z-40 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-blue-200 bg-white text-blue-700 shadow-md transition duration-200 hover:scale-110 hover:bg-blue-50 lg:flex"
+        >
+          {sidebarCollapsed ? (
+            <PanelLeftOpen className="h-4 w-4" />
+          ) : (
+            <PanelLeftClose className="h-4 w-4" />
+          )}
+        </button>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="relative z-30 flex h-16 shrink-0 items-center gap-4 border-b border-gray-100 bg-white px-4 sm:px-6">
           <div className="ml-auto flex items-center gap-3 sm:gap-5">
-            {/* Notifications */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={toggleNotifications}
-                className={`relative rounded-lg p-2 transition-colors ${notificationsOpen
-                  ? "bg-blue-50 text-blue-600"
-                  : "text-gray-500 hover:bg-gray-50"
-                  }`}
-                aria-label="View notifications"
-                aria-expanded={notificationsOpen}
-              >
-                <Bell className="h-5 w-5" />
-
-                {unreadNotificationCount > 0 && (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-medium text-white">
-                    {unreadNotificationCount > 9
-                      ? "9+"
-                      : unreadNotificationCount}
-                  </span>
-                )}
-              </button>
-
-              {notificationsOpen && (
-                <>
-                  <button
-                    type="button"
-                    onClick={closeNotifications}
-                    aria-label="Close notifications"
-                    className="fixed inset-0 z-40 cursor-default"
-                  />
-
-                  <div className="absolute right-0 top-full z-50 mt-2 w-[calc(100vw-2rem)] max-w-96 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
-                    <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                      <div>
-                        <h2 className="font-semibold text-gray-900">
-                          Notifications
-                        </h2>
-
-                        <p className="text-xs text-gray-400">
-                          {unreadNotificationCount === 0
-                            ? "No unread notifications"
-                            : `${unreadNotificationCount} unread notification${unreadNotificationCount === 1
-                              ? ""
-                              : "s"
-                            }`}
-                        </p>
-                      </div>
-
-                      {unreadNotificationCount > 0 && (
-                        <button
-                          type="button"
-                          onClick={
-                            markAllNotificationsAsRead
-                          }
-                          className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:underline"
-                        >
-                          <CheckCheck className="h-4 w-4" />
-                          Mark all read
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="max-h-96 overflow-y-auto">
-                      {notifications.length === 0 ? (
-                        <div className="px-6 py-10 text-center">
-                          <Bell className="mx-auto h-9 w-9 text-gray-300" />
-
-                          <p className="mt-3 text-sm font-medium text-gray-700">
-                            No notifications
-                          </p>
-
-                          <p className="mt-1 text-xs text-gray-400">
-                            New notifications will appear
-                            here.
-                          </p>
-                        </div>
-                      ) : (
-                        notifications.map(
-                          (notification) => {
-                            const {
-                              icon: Icon,
-                              containerClass,
-                              iconClass,
-                            } =
-                              getAdminNotificationStyle(
-                                notification.type,
-                              );
-
-                            return (
-                              <button
-                                key={notification.id}
-                                type="button"
-                                onClick={() =>
-                                  openNotification(
-                                    notification,
-                                  )
-                                }
-                                className={`flex w-full items-start gap-3 border-b border-gray-50 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-gray-50 ${notification.read
-                                  ? "bg-white"
-                                  : "bg-blue-50/40"
-                                  }`}
-                              >
-                                <div
-                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${containerClass}`}
-                                >
-                                  <Icon
-                                    className={`h-4 w-4 ${iconClass}`}
-                                  />
-                                </div>
-
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-start gap-2">
-                                    <p className="flex-1 text-sm font-medium text-gray-900">
-                                      {notification.title}
-                                    </p>
-
-                                    {!notification.read && (
-                                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-blue-600" />
-                                    )}
-                                  </div>
-
-                                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">
-                                    {notification.message}
-                                  </p>
-
-                                  <p className="mt-1 text-[11px] text-gray-400">
-                                    {notification.time}
-                                  </p>
-                                </div>
-                              </button>
-                            );
-                          },
-                        )
-                      )}
-                    </div>
-
-                    {notifications.length > 0 && (
-                      <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setActiveView(
-                              "announcements",
-                            );
-                            closeNotifications();
-                          }}
-                          className="text-xs font-medium text-blue-600 hover:underline"
-                        >
-                          View announcements
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={clearNotifications}
-                          className="flex items-center gap-1.5 text-xs font-medium text-red-500 hover:underline"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Clear all
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-
             {/* Admin account menu */}
             <div className="group relative pl-2">
               <button

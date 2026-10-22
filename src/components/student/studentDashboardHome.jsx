@@ -9,10 +9,8 @@ import {
     ChevronLeft,
     ChevronRight,
     Clock3,
-    ClipboardCheck,
     GraduationCap,
     RefreshCw,
-    Sparkles,
     Users,
 } from "lucide-react";
 import SubjectImage from "../subjectImage";
@@ -837,7 +835,6 @@ export default function StudentDashboardHome({
                 <div className="relative flex flex-col justify-between gap-7 sm:flex-row sm:items-center">
                     <div className="max-w-2xl">
                         <div className="flex w-fit items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-blue-50 backdrop-blur">
-                            <Sparkles className="h-3.5 w-3.5" />
                             Student Dashboard
                         </div>
 
