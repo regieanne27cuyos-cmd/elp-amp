@@ -11,7 +11,6 @@ import {
   ClipboardList,
   Clock,
   RefreshCw,
-  Sparkles,
   Trophy,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
@@ -649,7 +648,6 @@ export default function TeacherDashboardHome({
           <div className="relative flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
             <div className="max-w-2xl">
               <div className="flex w-fit items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-bold text-blue-50 backdrop-blur">
-                <Sparkles className="h-3.5 w-3.5" />
                 Teacher Dashboard
               </div>
 
