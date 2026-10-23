@@ -10,6 +10,7 @@ export function getSubjectImageUrl(path) {
     .getPublicUrl(path).data.publicUrl;
 }
 
+//test
 export default function SubjectImage({
   path,
   name,
