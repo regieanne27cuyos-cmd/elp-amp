@@ -4,6 +4,7 @@ import {
   Archive,
   Eye,
   EyeOff,
+  KeyRound,
 } from "lucide-react";
 
 import { supabase } from "../../lib/supabase";
@@ -809,6 +810,11 @@ export default function TeacherModule({
   const [actionError, setActionError] = useState("");
 
   const [
+    resettingPinId,
+    setResettingPinId,
+  ] = useState(null);
+
+  const [
     suggestedTeacherNumber,
     setSuggestedTeacherNumber,
   ] = useState("");
@@ -960,6 +966,90 @@ export default function TeacherModule({
     }
   }
 
+  async function handleResetPin(teacher) {
+    if (!teacher?.id) {
+      setActionError(
+        "No teacher was selected.",
+      );
+      return;
+    }
+
+    const teacherName =
+      teacher.full_name ||
+      [
+        teacher.last_name,
+        teacher.first_name,
+        teacher.middle_name,
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+    const confirmed = window.confirm(
+      `Reset the security PIN of "${teacherName || "this teacher"}"? The teacher will need to register a new PIN on the next login.`,
+    );
+
+    if (!confirmed) return;
+
+    setResettingPinId(teacher.id);
+    setActionError("");
+
+    try {
+      const {
+        data,
+        error: functionError,
+      } = await supabase.functions.invoke(
+        "manage-account-pin",
+        {
+          body: {
+            action: "admin-reset",
+            targetUserId: teacher.id,
+          },
+        },
+      );
+
+      if (functionError) {
+        let message =
+          functionError.message ||
+          "Unable to reset the PIN.";
+
+        try {
+          const responseBody =
+            await functionError.context?.json();
+
+          if (responseBody?.error) {
+            message =
+              responseBody.error;
+          }
+        } catch {
+          // Keep the original error message.
+        }
+
+        throw new Error(message);
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      window.alert(
+        data?.message ||
+        "The teacher PIN was reset successfully.",
+      );
+    } catch (resetError) {
+      console.error(
+        "Teacher PIN reset failed:",
+        resetError,
+      );
+
+      setActionError(
+        resetError.message ||
+        "Unable to reset the teacher PIN.",
+      );
+    } finally {
+      setResettingPinId(null);
+    }
+  }
+
   async function handleArchive(teacher) {
     const confirmed = window.confirm(
       `Archive teacher "${teacher.full_name}"? The teacher will no longer be able to log in.`,
@@ -1078,19 +1168,41 @@ export default function TeacherModule({
                   </td>
 
                   <td className="px-5 py-3.5">
-                    <RowActions
-                      disabled={saving}
-                      onEdit={() => {
-                        setSelected(teacher);
-                        setActionError("");
-                        setModalMode("edit");
-                      }}
-                      onDelete={
-                        canDelete
-                          ? () => handleArchive(teacher)
-                          : undefined
-                      }
-                    />
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        disabled={
+                          saving ||
+                          resettingPinId === teacher.id
+                        }
+                        onClick={() =>
+                          handleResetPin(teacher)
+                        }
+                        aria-label={`Reset PIN of ${teacher.full_name ||
+                          teacher.first_name ||
+                          "teacher"
+                          }`}
+                        title="Reset security PIN"
+                        className="rounded-lg p-2 text-amber-600 transition-colors hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <KeyRound className="h-4 w-4" />
+                      </button>
+
+                      <RowActions
+                        disabled={saving}
+                        onEdit={() => {
+                          setSelected(teacher);
+                          setActionError("");
+                          setModalMode("edit");
+                        }}
+                        onDelete={
+                          canDelete
+                            ? () =>
+                              handleArchive(teacher)
+                            : undefined
+                        }
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
