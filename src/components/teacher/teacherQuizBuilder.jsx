@@ -309,7 +309,7 @@ export default function TeacherQuizBuilder({ activity, onBack }) {
         <Modal title={modalMode === "edit" ? "Edit Quiz Question" : "Add Quiz Question"} onClose={() => !saving && setModalMode(null)}>
           <form onSubmit={saveQuestion} className="space-y-4">
             {error && <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-            <label className="block text-sm font-medium text-gray-700">Question type<select className={`${inputClass} mt-1.5`} value={form.question_type} onChange={(event) => update("question_type", event.target.value)}><option value="multiple_choice">Multiple Choice</option><option value="true_false">True or False</option><option value="short_answer">Short Answer</option></select></label>
+            <label className="block text-sm font-medium text-gray-700">Question type<select className={`${inputClass} mt-1.5`} value={form.question_type} onChange={(event) => update("question_type", event.target.value)}><option value="multiple_choice">Multiple Choice</option><option value="true_false">True or False</option></select></label>
             <label className="block text-sm font-medium text-gray-700">Question<textarea className={`${inputClass} mt-1.5 min-h-24 resize-y`} value={form.question_text} onChange={(event) => update("question_text", event.target.value)} required /></label>
             <label className="block text-sm font-medium text-gray-700">Points<input className={`${inputClass} mt-1.5`} type="number" min="0.01" step="0.01" value={form.points} onChange={(event) => update("points", event.target.value)} required /></label>
 
