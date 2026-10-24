@@ -349,15 +349,6 @@ export default function SchoolLogin() {
                 >
                   Password
                 </label>
-
-                <button
-                  type="button"
-                  onClick={handleForgotPassword}
-                  disabled={submitting}
-                  className="text-xs font-medium text-blue-600 hover:underline disabled:opacity-60"
-                >
-                  Forgot password?
-                </button>
               </div>
 
               <div className="relative">
@@ -421,12 +412,12 @@ export default function SchoolLogin() {
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-500">
-            Don&apos;t have an account?{" "}
+            Forgot your password?{" "}
             <button
               type="button"
               onClick={() =>
                 setError(
-                  "Please contact your school administrator to request an account.",
+                  "Please contact your school administrator to your account request",
                 )
               }
               className="font-medium text-blue-600 hover:underline"

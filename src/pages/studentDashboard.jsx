@@ -25,6 +25,7 @@ import StudentClassWorkspace from "../components/student/studentClassWorkspace";
 import StudentAnnouncements from "../components/student/studentAnnouncements";
 import StudentCalendar from "../components/student/studentCalendar";
 import logo from "../assets/ejist-primary-logo.png";
+import AccountPinGate from "../components/auth/accountPinGate";
 
 const navigationItems = [
   {
@@ -84,34 +85,30 @@ function StudentSidebar({
   }
 
   function navigationButtonClass(active) {
-    return `group flex w-full items-center rounded-xl py-2.5 text-left text-sm font-medium transition-all duration-200 ${
-      collapsed
-        ? "gap-3 px-3 lg:justify-center lg:gap-0 lg:px-2"
-        : "gap-3 px-3"
-    } ${
-      active
+    return `group flex w-full items-center rounded-xl py-2.5 text-left text-sm font-medium transition-all duration-200 ${collapsed
+      ? "gap-3 px-3 lg:justify-center lg:gap-0 lg:px-2"
+      : "gap-3 px-3"
+      } ${active
         ? "bg-white text-blue-700 shadow-sm"
         : "text-blue-100 hover:bg-white/10 hover:text-white"
-    }`;
+      }`;
   }
 
   function iconClass(active) {
-    return `h-[18px] w-[18px] shrink-0 transition-colors ${
-      active
-        ? "text-blue-600"
-        : "text-blue-200 group-hover:text-white"
-    }`;
+    return `h-[18px] w-[18px] shrink-0 transition-colors ${active
+      ? "text-blue-600"
+      : "text-blue-200 group-hover:text-white"
+      }`;
   }
 
   return (
     <>
       {/* Mobile background overlay */}
       <div
-        className={`fixed inset-0 z-30 bg-slate-950/50 backdrop-blur-[1px] transition-opacity duration-300 ease-in-out lg:hidden ${
-          mobileOpen
-            ? "pointer-events-auto opacity-100"
-            : "pointer-events-none opacity-0"
-        }`}
+        className={`fixed inset-0 z-30 bg-slate-950/50 backdrop-blur-[1px] transition-opacity duration-300 ease-in-out lg:hidden ${mobileOpen
+          ? "pointer-events-auto opacity-100"
+          : "pointer-events-none opacity-0"
+          }`}
       >
         <button
           type="button"
@@ -123,15 +120,13 @@ function StudentSidebar({
 
       {/* Student sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 h-dvh w-60 shrink-0 overflow-visible bg-gradient-to-b from-blue-700 via-blue-700 to-blue-900 text-white shadow-xl transition-[width,transform] duration-300 ease-in-out lg:sticky lg:top-0 lg:translate-x-0 lg:shadow-none ${
-          collapsed
-            ? "lg:w-20"
-            : "lg:w-60"
-        } ${
-          mobileOpen
+        className={`fixed inset-y-0 left-0 z-40 h-dvh w-60 shrink-0 overflow-visible bg-gradient-to-b from-blue-700 via-blue-700 to-blue-900 text-white shadow-xl transition-[width,transform] duration-300 ease-in-out lg:sticky lg:top-0 lg:translate-x-0 lg:shadow-none ${collapsed
+          ? "lg:w-20"
+          : "lg:w-60"
+          } ${mobileOpen
             ? "translate-x-0"
             : "-translate-x-full"
-        }`}
+          }`}
       >
         {/* Desktop middle collapse button */}
         <button
@@ -159,11 +154,10 @@ function StudentSidebar({
         <div className="flex h-full min-h-full flex-col overflow-y-auto">
           {/* Logo and title */}
           <div
-            className={`sticky top-0 z-10 flex h-16 shrink-0 items-center border-b border-white/10 bg-blue-700/95 backdrop-blur transition-all duration-300 ${
-              collapsed
-                ? "gap-2 px-4 lg:justify-center lg:px-2"
-                : "gap-3 px-4"
-            }`}
+            className={`sticky top-0 z-10 flex h-16 shrink-0 items-center border-b border-white/10 bg-blue-700/95 backdrop-blur transition-all duration-300 ${collapsed
+              ? "gap-2 px-4 lg:justify-center lg:px-2"
+              : "gap-3 px-4"
+              }`}
           >
             <button
               type="button"
@@ -183,11 +177,10 @@ function StudentSidebar({
             </button>
 
             <span
-              className={`truncate text-lg font-bold tracking-tight ${
-                collapsed
-                  ? "lg:hidden"
-                  : ""
-              }`}
+              className={`truncate text-lg font-bold tracking-tight ${collapsed
+                ? "lg:hidden"
+                : ""
+                }`}
             >
               ELP-AMP Student
             </span>
@@ -206,11 +199,10 @@ function StudentSidebar({
           {/* Main navigation */}
           <nav className="flex-1 space-y-1 px-3 py-4">
             <p
-              className={`mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-200 ${
-                collapsed
-                  ? "lg:hidden"
-                  : ""
-              }`}
+              className={`mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-200 ${collapsed
+                ? "lg:hidden"
+                : ""
+                }`}
             >
               Main Menu
             </p>
@@ -253,11 +245,10 @@ function StudentSidebar({
                     />
 
                     <span
-                      className={`truncate ${
-                        collapsed
-                          ? "lg:hidden"
-                          : ""
-                      }`}
+                      className={`truncate ${collapsed
+                        ? "lg:hidden"
+                        : ""
+                        }`}
                     >
                       {label}
                     </span>
@@ -277,11 +268,10 @@ function StudentSidebar({
           {/* Account section */}
           <div className="shrink-0 border-t border-white/10 bg-blue-900/30 px-3 py-3">
             <p
-              className={`mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-200 ${
-                collapsed
-                  ? "lg:hidden"
-                  : ""
-              }`}
+              className={`mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-200 ${collapsed
+                ? "lg:hidden"
+                : ""
+                }`}
             >
               Account
             </p>
@@ -295,20 +285,18 @@ function StudentSidebar({
                   : undefined
               }
               aria-label="Log out"
-              className={`group flex w-full items-center rounded-xl py-2.5 text-left text-sm font-medium text-red-100 transition-all duration-200 hover:bg-red-500/20 hover:text-white ${
-                collapsed
-                  ? "gap-3 px-3 lg:justify-center lg:gap-0 lg:px-2"
-                  : "gap-3 px-3"
-              }`}
+              className={`group flex w-full items-center rounded-xl py-2.5 text-left text-sm font-medium text-red-100 transition-all duration-200 hover:bg-red-500/20 hover:text-white ${collapsed
+                ? "gap-3 px-3 lg:justify-center lg:gap-0 lg:px-2"
+                : "gap-3 px-3"
+                }`}
             >
               <LogOut className="h-[18px] w-[18px] shrink-0 text-red-200 transition-colors group-hover:text-white" />
 
               <span
-                className={`truncate ${
-                  collapsed
-                    ? "lg:hidden"
-                    : ""
-                }`}
+                className={`truncate ${collapsed
+                  ? "lg:hidden"
+                  : ""
+                  }`}
               >
                 Log out
               </span>
@@ -347,6 +335,11 @@ function PlaceholderView({
 export default function StudentDashboard() {
   const navigate = useNavigate();
 
+  const [
+    pinUnlocked,
+    setPinUnlocked,
+  ] = useState(false);
+
   const {
     student,
     classes = [],
@@ -380,6 +373,11 @@ export default function StudentDashboard() {
   ] = useState(null);
 
   async function handleLogout() {
+
+    sessionStorage.removeItem(
+      `elp_amp_pin_unlocked_${student?.id}`,
+    );
+
     try {
       const { error: logoutError } =
         await supabase.auth.signOut();
@@ -399,7 +397,7 @@ export default function StudentDashboard() {
 
       window.alert(
         logoutError.message ||
-          "Unable to log out. Please try again.",
+        "Unable to log out. Please try again.",
       );
     }
   }
@@ -545,6 +543,14 @@ export default function StudentDashboard() {
 
   return (
     <div className="flex min-h-screen bg-gray-50 text-gray-900">
+      {!pinUnlocked && (
+        <AccountPinGate
+          accountType="Student"
+          onUnlocked={() =>
+            setPinUnlocked(true)
+          }
+        />
+      )}
       <StudentSidebar
         activeView={activeView}
         mobileOpen={mobileOpen}
@@ -596,7 +602,7 @@ export default function StudentDashboard() {
                 }
               }
             } catch (
-              notificationError
+            notificationError
             ) {
               console.error(
                 "Unable to open notification:",

@@ -3,6 +3,7 @@ import {
   AlertCircle,
   LoaderCircle,
 } from "lucide-react";
+import { supabase } from "../lib/supabase";
 import TeacherSidebar from "../components/teacher/teacherSidebar";
 import TeacherHeader from "../components/teacher/teacherHeader";
 import TeacherDashboardHome from "../components/teacher/teacherDashboardHome";
@@ -10,10 +11,16 @@ import TeacherModuleContent from "../components/teacher/teacherModuleContent";
 import TeacherClassWorkspace from "../components/teacher/teacherClassWorkspace";
 import TeacherActivityWorkspace from "../components/teacher/teacherActivityWorkspace";
 import useTeacherDashboardData from "../hooks/useTeacherDashboardData";
+import AccountPinGate from "../components/auth/accountPinGate";
 
 export default function TeacherDashboard() {
   const [activeView, setActiveView] =
     useState("dashboard");
+
+  const [
+    pinUnlocked,
+    setPinUnlocked,
+  ] = useState(false);
 
   const [selectedClass, setSelectedClass] =
     useState(null);
@@ -44,6 +51,22 @@ export default function TeacherDashboard() {
     announcementsError,
     logout,
   } = useTeacherDashboardData();
+
+  async function handleLogout() {
+    const {
+      data: {
+        user,
+      },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      sessionStorage.removeItem(
+        `elp_amp_pin_unlocked_${user.id}`,
+      );
+    }
+
+    await logout();
+  }
 
   function selectView(view) {
     setActiveView(view);
@@ -192,7 +215,7 @@ export default function TeacherDashboard() {
 
         <button
           type="button"
-          onClick={logout}
+          onClick={handleLogout}
           className="text-sm text-gray-500 hover:underline"
         >
           Return to login
@@ -203,6 +226,14 @@ export default function TeacherDashboard() {
 
   return (
     <div className="flex min-h-screen bg-gray-50 text-gray-900">
+      {!pinUnlocked && (
+        <AccountPinGate
+          accountType="Teacher"
+          onUnlocked={() =>
+            setPinUnlocked(true)
+          }
+        />
+      )}
       <TeacherSidebar
         activeView={activeView}
         mobileOpen={mobileSidebarOpen}
@@ -210,7 +241,7 @@ export default function TeacherDashboard() {
           setMobileSidebarOpen(false)
         }
         onSelectView={selectView}
-        onLogout={logout}
+        onLogout={handleLogout}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -223,7 +254,7 @@ export default function TeacherDashboard() {
             setMobileSidebarOpen(true)
           }
           onSelectView={selectView}
-          onLogout={logout}
+          onLogout={handleLogout}
         />
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">

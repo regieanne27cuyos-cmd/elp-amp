@@ -6,6 +6,7 @@ import {
   Plus,
   Search,
   Trash2,
+  KeyRound,
 } from "lucide-react";
 import {
   Field,
@@ -1705,6 +1706,87 @@ export default function StudentModule({
     setSelectedStudentIds([]);
   }
 
+  async function handleResetPin(student) {
+    if (!student?.id) {
+      setActionError(
+        "No student was selected.",
+      );
+      return;
+    }
+
+    const studentName =
+      student.full_name ||
+      [
+        student.last_name,
+        student.first_name,
+        student.middle_name,
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+    const confirmed = window.confirm(
+      `Reset the security PIN of "${studentName || "this student"}"? The student will need to register a new PIN on the next login.`,
+    );
+
+    if (!confirmed) return;
+
+    setActionError("");
+
+    try {
+      const {
+        data,
+        error: functionError,
+      } = await supabase.functions.invoke(
+        "manage-account-pin",
+        {
+          body: {
+            action: "admin-reset",
+            targetUserId: student.id,
+          },
+        },
+      );
+
+      if (functionError) {
+        let message =
+          functionError.message ||
+          "Unable to reset the PIN.";
+
+        try {
+          const responseBody =
+            await functionError.context?.json();
+
+          if (responseBody?.error) {
+            message =
+              responseBody.error;
+          }
+        } catch {
+          // Keep the original message.
+        }
+
+        throw new Error(message);
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      window.alert(
+        data?.message ||
+        "The student PIN was reset successfully.",
+      );
+    } catch (resetError) {
+      console.error(
+        "Student PIN reset failed:",
+        resetError,
+      );
+
+      setActionError(
+        resetError.message ||
+        "Unable to reset the student PIN.",
+      );
+    }
+  }
+
   async function handleBulkArchive() {
     if (!canDelete) {
       setActionError(
@@ -2146,27 +2228,35 @@ export default function StudentModule({
                         />
                       </td>
                       <td className="px-5 py-3.5">
-                        <div className="flex justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleResetPin(student)
+                            }
+                            aria-label={`Reset PIN of ${student.full_name ||
+                              student.first_name ||
+                              "student"
+                              }`}
+                            title="Reset security PIN"
+                            className="rounded-lg p-2 text-amber-600 transition-colors hover:bg-amber-50"
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </button>
+
                           <RowActions
-                            onEdit={() =>
-                              openEditModal(student)
+                            onEdit={() => {
+                              setSelected(student);
+                              setActionError("");
+                              setModalMode("edit");
+                            }}
+                            onDelete={
+                              canDelete
+                                ? () =>
+                                  handleDelete(student)
+                                : undefined
                             }
                           />
-
-                          {canDelete && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleArchive(student)
-                              }
-                              disabled={saving || bulkDeleting}
-                              aria-label={`Archive ${student.full_name}`}
-                              title="Archive student"
-                              className="rounded-lg p-2 text-amber-600 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              <Archive className="h-4 w-4" />
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -2231,6 +2321,7 @@ export default function StudentModule({
           <Modal
             title="Edit Student"
             onClose={closeModal}
+            size="xl"
           >
             {actionError && (
               <div className="mb-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
