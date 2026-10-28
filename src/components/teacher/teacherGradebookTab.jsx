@@ -1,11 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-    BarChart3,
-    RefreshCw,
-    Save,
-    Settings2,
-    Users,
-} from "lucide-react";
+import { BarChart3, RefreshCw, Save, Settings2, Users } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
 const periods = [
@@ -76,6 +70,7 @@ export default function TeacherGradebookTab({
     const [period, setPeriod] = useState(1);
     const [activities, setActivities] = useState([]);
     const [activityRecords, setActivityRecords] = useState([]);
+    const [activityAccess, setActivityAccess] = useState([]);
     const [activityValues, setActivityValues] = useState({});
     const [exams, setExams] = useState([]);
     const [examRecords, setExamRecords] = useState([]);
@@ -103,9 +98,7 @@ export default function TeacherGradebookTab({
                     .order("due_at", { ascending: true }),
                 supabase
                     .from("grading_exams")
-                    .select(
-                        "id, teaching_assignment_id, grading_period, title, points",
-                    )
+                    .select("id, teaching_assignment_id, grading_period, title, points")
                     .eq("teaching_assignment_id", classRecord.id),
             ]);
 
@@ -115,18 +108,38 @@ export default function TeacherGradebookTab({
             const loadedActivities = activitiesResult.data || [];
             const loadedExams = examsResult.data || [];
             let loadedActivityRecords = [];
+            let loadedActivityAccess = [];
             let loadedExamRecords = [];
 
             if (loadedActivities.length > 0) {
-                const { data, error: scoresError } = await supabase
-                    .from("activity_scores")
-                    .select("id, activity_id, student_id, score")
-                    .in(
-                        "activity_id",
-                        loadedActivities.map((activity) => activity.id),
-                    );
-                if (scoresError) throw scoresError;
-                loadedActivityRecords = data || [];
+                const activityIds = loadedActivities.map((activity) => activity.id);
+
+                const [scoresResult, accessResult] = await Promise.all([
+                    supabase
+                        .from("activity_scores")
+                        .select("id, activity_id, student_id, score, is_automatic_absence")
+                        .in("activity_id", activityIds),
+                    supabase
+                        .from("activity_students")
+                        .select(
+                            `
+                            activity_id,
+                            student_id,
+                            can_access,
+                            activity_status,
+                            attendance_status,
+                            attendance_date,
+                            late_submission_allowed
+                        `,
+                        )
+                        .in("activity_id", activityIds),
+                ]);
+
+                if (scoresResult.error) throw scoresResult.error;
+                if (accessResult.error) throw accessResult.error;
+
+                loadedActivityRecords = scoresResult.data || [];
+                loadedActivityAccess = accessResult.data || [];
             }
 
             if (loadedExams.length > 0) {
@@ -148,15 +161,26 @@ export default function TeacherGradebookTab({
                 ] = String(record.score);
             });
 
+            loadedActivityAccess.forEach((record) => {
+                if (
+                    record.attendance_status === "absent" &&
+                    record.can_access === false &&
+                    !record.late_submission_allowed
+                ) {
+                    loadedActivityValues[
+                        activityKey(record.activity_id, record.student_id)
+                    ] = "0";
+                }
+            });
+
             const loadedExamValues = {};
             loadedExamRecords.forEach((record) => {
                 const exam = loadedExams.find(
                     (item) => item.id === record.grading_exam_id,
                 );
                 if (exam) {
-                    loadedExamValues[
-                        examKey(exam.grading_period, record.student_id)
-                    ] = String(record.score);
+                    loadedExamValues[examKey(exam.grading_period, record.student_id)] =
+                        String(record.score);
                 }
             });
 
@@ -170,6 +194,7 @@ export default function TeacherGradebookTab({
 
             setActivities(loadedActivities);
             setActivityRecords(loadedActivityRecords);
+            setActivityAccess(loadedActivityAccess);
             setActivityValues(loadedActivityValues);
             setExams(loadedExams);
             setExamRecords(loadedExamRecords);
@@ -177,9 +202,7 @@ export default function TeacherGradebookTab({
             setExamSettings(settings);
         } catch (loadError) {
             console.error("Failed to load gradebook:", loadError);
-            setError(
-                loadError.message || "Unable to load the gradebook.",
-            );
+            setError(loadError.message || "Unable to load the gradebook.");
         } finally {
             setLoading(false);
         }
@@ -193,11 +216,33 @@ export default function TeacherGradebookTab({
     const periodActivities = useMemo(
         () =>
             activities.filter(
-                (activity) =>
-                    Number(activity.grading_period) === period,
+                (activity) => Number(activity.grading_period) === period,
             ),
         [activities, period],
     );
+
+    const accessByActivityStudent = useMemo(
+        () =>
+            new Map(
+                activityAccess.map((record) => [
+                    activityKey(record.activity_id, record.student_id),
+                    record,
+                ]),
+            ),
+        [activityAccess],
+    );
+
+    function isAbsentWithoutAccess(activityId, studentId) {
+        const access = accessByActivityStudent.get(
+            activityKey(activityId, studentId),
+        );
+
+        return Boolean(
+            access?.attendance_status === "absent" &&
+            access?.can_access === false &&
+            !access?.late_submission_allowed,
+        );
+    }
 
     const periodCounts = useMemo(() => {
         const counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
@@ -233,43 +278,26 @@ export default function TeacherGradebookTab({
     }
 
     function studentTotal(studentId) {
-        const activityTotal = periodActivities.reduce(
-            (total, activity) => {
-                const value =
-                    activityValues[
-                    activityKey(activity.id, studentId)
-                    ];
-                return value === "" || value === undefined
-                    ? total
-                    : total + Number(value);
-            },
-            0,
-        );
+        const activityTotal = periodActivities.reduce((total, activity) => {
+            const value = activityValues[activityKey(activity.id, studentId)];
+            return value === "" || value === undefined
+                ? total
+                : total + Number(value);
+        }, 0);
         const examValue = examValues[examKey(period, studentId)];
         return (
             activityTotal +
-            (examValue === "" || examValue === undefined
-                ? 0
-                : Number(examValue))
+            (examValue === "" || examValue === undefined ? 0 : Number(examValue))
         );
     }
 
     function isComplete(studentId) {
-        const activitiesComplete = periodActivities.every(
-            (activity) => {
-                const value =
-                    activityValues[
-                    activityKey(activity.id, studentId)
-                    ];
-                return value !== "" && value !== undefined;
-            },
-        );
+        const activitiesComplete = periodActivities.every((activity) => {
+            const value = activityValues[activityKey(activity.id, studentId)];
+            return value !== "" && value !== undefined;
+        });
         const examValue = examValues[examKey(period, studentId)];
-        return (
-            activitiesComplete &&
-            examValue !== "" &&
-            examValue !== undefined
-        );
+        return activitiesComplete && examValue !== "" && examValue !== undefined;
     }
 
     function percentage(studentId) {
@@ -288,14 +316,11 @@ export default function TeacherGradebookTab({
         for (const student of students) {
             for (const activity of periodActivities) {
                 const value =
-                    activityValues[
-                    activityKey(activity.id, student.student_id)
-                    ];
+                    activityValues[activityKey(activity.id, student.student_id)];
                 if (
                     value !== "" &&
                     value !== undefined &&
-                    (Number(value) < 0 ||
-                        Number(value) > Number(activity.points))
+                    (Number(value) < 0 || Number(value) > Number(activity.points))
                 ) {
                     throw new Error(
                         `${student.full_name}'s score for ${activity.title} must be between 0 and ${activity.points}.`,
@@ -303,13 +328,11 @@ export default function TeacherGradebookTab({
                 }
             }
 
-            const examValue =
-                examValues[examKey(period, student.student_id)];
+            const examValue = examValues[examKey(period, student.student_id)];
             if (
                 examValue !== "" &&
                 examValue !== undefined &&
-                (Number(examValue) < 0 ||
-                    Number(examValue) > examPoints)
+                (Number(examValue) < 0 || Number(examValue) > examPoints)
             ) {
                 throw new Error(
                     `${student.full_name}'s exam score must be between 0 and ${examPoints}.`,
@@ -331,30 +354,26 @@ export default function TeacherGradebookTab({
                 error: userError,
             } = await supabase.auth.getUser();
             if (userError || !user) {
-                throw new Error(
-                    "Your session has expired. Please sign in again.",
-                );
+                throw new Error("Your session has expired. Please sign in again.");
             }
 
-            const { data: savedExam, error: examError } =
-                await supabase
-                    .from("grading_exams")
-                    .upsert(
-                        {
-                            teaching_assignment_id: classRecord.id,
-                            grading_period: period,
-                            title: currentExamSettings.title.trim(),
-                            points: examPoints,
-                            created_by: user.id,
-                            updated_at: new Date().toISOString(),
-                        },
-                        {
-                            onConflict:
-                                "teaching_assignment_id,grading_period",
-                        },
-                    )
-                    .select()
-                    .single();
+            const { data: savedExam, error: examError } = await supabase
+                .from("grading_exams")
+                .upsert(
+                    {
+                        teaching_assignment_id: classRecord.id,
+                        grading_period: period,
+                        title: currentExamSettings.title.trim(),
+                        points: examPoints,
+                        created_by: user.id,
+                        updated_at: new Date().toISOString(),
+                    },
+                    {
+                        onConflict: "teaching_assignment_id,grading_period",
+                    },
+                )
+                .select()
+                .single();
             if (examError) throw examError;
 
             const activityIds = new Set(
@@ -364,10 +383,12 @@ export default function TeacherGradebookTab({
 
             periodActivities.forEach((activity) => {
                 students.forEach((student) => {
+                    if (isAbsentWithoutAccess(activity.id, student.student_id)) {
+                        return;
+                    }
+
                     const value =
-                        activityValues[
-                        activityKey(activity.id, student.student_id)
-                        ];
+                        activityValues[activityKey(activity.id, student.student_id)];
                     if (value !== "" && value !== undefined) {
                         activityRows.push({
                             activity_id: activity.id,
@@ -410,8 +431,7 @@ export default function TeacherGradebookTab({
             }
 
             const examRows = students.flatMap((student) => {
-                const value =
-                    examValues[examKey(period, student.student_id)];
+                const value = examValues[examKey(period, student.student_id)];
                 return value === "" || value === undefined
                     ? []
                     : [
@@ -429,12 +449,8 @@ export default function TeacherGradebookTab({
                 .filter(
                     (record) =>
                         record.grading_exam_id === oldExamId &&
-                        (examValues[
-                            examKey(period, record.student_id)
-                        ] === "" ||
-                            examValues[
-                            examKey(period, record.student_id)
-                            ] === undefined),
+                        (examValues[examKey(period, record.student_id)] === "" ||
+                            examValues[examKey(period, record.student_id)] === undefined),
                 )
                 .map((record) => record.id);
 
@@ -461,9 +477,7 @@ export default function TeacherGradebookTab({
             );
         } catch (saveError) {
             console.error("Failed to save gradebook:", saveError);
-            setError(
-                saveError.message || "Unable to save the gradebook.",
-            );
+            setError(saveError.message || "Unable to save the gradebook.");
         } finally {
             setSaving(false);
         }
@@ -498,9 +512,7 @@ export default function TeacherGradebookTab({
         <div className="space-y-5 p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h2 className="font-bold text-gray-900">
-                        Class Gradebook
-                    </h2>
+                    <h2 className="font-bold text-gray-900">Class Gradebook</h2>
                     <p className="text-sm text-gray-500">
                         Record activity and examination scores per grading period.
                     </p>
@@ -671,36 +683,56 @@ export default function TeacherGradebookTab({
                                             <StudentCell student={student} />
                                         </td>
                                         {periodActivities.map((activity) => {
-                                            const key = activityKey(
+                                            const key = activityKey(activity.id, student.student_id);
+                                            const absentWithoutAccess = isAbsentWithoutAccess(
                                                 activity.id,
                                                 student.student_id,
                                             );
                                             return (
-                                                <td
-                                                    key={activity.id}
-                                                    className="px-3 py-3 text-center"
-                                                >
-                                                    <div className="mx-auto flex max-w-[110px] items-center gap-1">
-                                                        <input
-                                                            type="number"
-                                                            min="0"
-                                                            max={activity.points}
-                                                            step="0.01"
-                                                            value={activityValues[key] ?? ""}
-                                                            onChange={(event) => {
-                                                                setActivityValues((current) => ({
-                                                                    ...current,
-                                                                    [key]: event.target.value,
-                                                                }));
-                                                                setSuccess("");
-                                                            }}
-                                                            aria-label={`${student.full_name} score for ${activity.title}`}
-                                                            className="w-full rounded-lg border border-gray-200 px-2 py-2 text-center outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                                                        />
-                                                        <span className="text-xs text-gray-400">
-                                                            /{Number(activity.points)}
-                                                        </span>
-                                                    </div>
+                                                <td key={activity.id} className="px-3 py-3 text-center">
+                                                    {absentWithoutAccess ? (
+                                                        <div className="mx-auto max-w-[125px]">
+                                                            <div className="flex items-center gap-1">
+                                                                <input
+                                                                    type="number"
+                                                                    value="0"
+                                                                    readOnly
+                                                                    disabled
+                                                                    aria-label={`${student.full_name} automatic absence score for ${activity.title}`}
+                                                                    className="w-full cursor-not-allowed rounded-lg border border-red-200 bg-red-50 px-2 py-2 text-center font-semibold text-red-700"
+                                                                />
+                                                                <span className="text-xs text-gray-400">
+                                                                    /{Number(activity.points)}
+                                                                </span>
+                                                            </div>
+
+                                                            <span className="mt-1 inline-flex rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+                                                                Missing — Absent
+                                                            </span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="mx-auto flex max-w-[110px] items-center gap-1">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                max={activity.points}
+                                                                step="0.01"
+                                                                value={activityValues[key] ?? ""}
+                                                                onChange={(event) => {
+                                                                    setActivityValues((current) => ({
+                                                                        ...current,
+                                                                        [key]: event.target.value,
+                                                                    }));
+                                                                    setSuccess("");
+                                                                }}
+                                                                aria-label={`${student.full_name} score for ${activity.title}`}
+                                                                className="w-full rounded-lg border border-gray-200 px-2 py-2 text-center outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                                            />
+                                                            <span className="text-xs text-gray-400">
+                                                                /{Number(activity.points)}
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </td>
                                             );
                                         })}
@@ -712,15 +744,11 @@ export default function TeacherGradebookTab({
                                                     max={examPoints || undefined}
                                                     step="0.01"
                                                     value={
-                                                        examValues[
-                                                        examKey(period, student.student_id)
-                                                        ] ?? ""
+                                                        examValues[examKey(period, student.student_id)] ??
+                                                        ""
                                                     }
                                                     onChange={(event) => {
-                                                        const key = examKey(
-                                                            period,
-                                                            student.student_id,
-                                                        );
+                                                        const key = examKey(period, student.student_id);
                                                         setExamValues((current) => ({
                                                             ...current,
                                                             [key]: event.target.value,
@@ -760,12 +788,15 @@ export default function TeacherGradebookTab({
 
             {periodActivities.length === 0 && (
                 <div className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-                    No activities are assigned to {periods[period - 1].label} yet. You can still record the examination scores.
+                    No activities are assigned to {periods[period - 1].label} yet. You can
+                    still record the examination scores.
                 </div>
             )}
 
             <p className="text-xs text-gray-400">
-                Raw percentage includes all activity points and the examination points. It appears after all score entries for a student are completed. No grade transmutation is applied.
+                Raw percentage includes all activity points and the examination points.
+                It appears after all score entries for a student are completed. No grade
+                transmutation is applied.
             </p>
         </div>
     );

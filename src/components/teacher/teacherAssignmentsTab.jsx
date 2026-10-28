@@ -1,12 +1,9 @@
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarClock,
   CheckCircle2,
   ClipboardList,
+  Download,
   FileCheck2,
   HelpCircle,
   ListChecks,
@@ -19,23 +16,21 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import FilePreviewLink from "../filePreviewLink";
 import TeacherActivitySubmissions from "./teacherActivitySubmissions";
 import TeacherQuizBuilder from "./teacherQuizBuilder";
+import QuizQuestionDraftBuilder, {
+  createEmptyQuizQuestion,
+  prepareQuizQuestions,
+} from "./quizQuestionDraftBuilder";
+import TeacherAbsentActivityAccess from "./teacherAbsentActivityAccess";
+import ActivityAttendanceAccessPicker from "./activityAttendanceAccessPicker";
 import useClassStudents from "../../hooks/useClassStudents";
 
-const inputClass =
-  "w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60";
-
 const BUCKET = "activity-instructions";
-const MAX_FILE_SIZE =
-  10 * 1024 * 1024;
-
-const ALLOWED_EXTENSIONS = [
-  "pdf",
-  "doc",
-  "docx",
-];
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = ["pdf", "doc", "docx"];
+const inputClass =
+  "w-full rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5 text-sm text-gray-700 outline-none transition focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100";
 
 const types = {
   assignment: {
@@ -60,7 +55,6 @@ const types = {
 
 const emptyForm = {
   activity_type: "assignment",
-  custom_activity_type: "",
   grading_period: "1",
   title: "",
   instructions: "",
@@ -76,35 +70,18 @@ const gradingPeriods = [
   { value: "4", label: "4th Grading" },
 ];
 
-const otherType = {
-  label: "Other",
-  icon: ListChecks,
-  badge: "bg-teal-100 text-teal-700",
-  iconStyle: "bg-teal-50 text-teal-600",
-};
-
-function getActivityType(activity) {
-  if (activity.custom_activity_type?.trim()) {
-    return {
-      ...otherType,
-      label: activity.custom_activity_type.trim(),
-    };
-  }
-
+function gradingLabel(value) {
   return (
-    types[activity.activity_type] ||
-    types.assignment
+    gradingPeriods.find((period) => Number(period.value) === Number(value))
+      ?.label || "Unknown grading period"
   );
 }
 
-function gradingLabel(value) {
-  return gradingPeriods.find(
-    (period) => Number(period.value) === Number(value),
-  )?.label || "Unknown grading period";
-}
-
 function fileExtension(name) {
-  return String(name || "").split(".").pop().toLowerCase();
+  return String(name || "")
+    .split(".")
+    .pop()
+    .toLowerCase();
 }
 
 function validateFile(file) {
@@ -156,17 +133,27 @@ function formatDueDate(value) {
 function dueState(value) {
   const hours = (new Date(value).getTime() - Date.now()) / 3_600_000;
   if (hours < 0) return { label: "Past due", style: "bg-red-100 text-red-700" };
-  if (hours <= 24) return { label: "Due soon", style: "bg-amber-100 text-amber-700" };
+  if (hours <= 24)
+    return { label: "Due soon", style: "bg-amber-100 text-amber-700" };
   return { label: "Upcoming", style: "bg-green-100 text-green-700" };
 }
 
 function Modal({ title, onClose, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
           <h2 className="font-bold text-gray-900">{title}</h2>
-          <button type="button" onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-50" aria-label="Close">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-50"
+            aria-label="Close"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -180,7 +167,8 @@ function Field({ label, required, children }) {
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-gray-700">
-        {label}{required && <span className="text-red-500"> *</span>}
+        {label}
+        {required && <span className="text-red-500"> *</span>}
       </label>
       {children}
     </div>
@@ -188,11 +176,13 @@ function Field({ label, required, children }) {
 }
 
 function ActivityForm({
+  classRecordId,
   initialData,
   students = [],
-  studentsLoading,
-  studentsError,
+  studentsLoading = false,
+  studentsError = "",
   existingAccess = [],
+  isEditing,
   saving,
   error,
   onCancel,
@@ -201,137 +191,47 @@ function ActivityForm({
   const [form, setForm] = useState(() =>
     initialData
       ? {
-        activity_type:
-          initialData.custom_activity_type
-            ? "other"
-            : initialData.activity_type ||
-            "assignment",
-
-        custom_activity_type:
-          initialData.custom_activity_type || "",
-
-        grading_period: String(
-          initialData.grading_period || 1,
-        ),
+        activity_type: initialData.activity_type,
+        grading_period: String(initialData.grading_period || 1),
         title: initialData.title || "",
-        instructions:
-          initialData.instructions || "",
-        due_at: toLocalInput(
-          initialData.due_at,
-        ),
-        points: String(
-          initialData.points ?? 100,
-        ),
-        status:
-          initialData.status || "published",
+        instructions: initialData.instructions || "",
+        due_at: toLocalInput(initialData.due_at),
+        points: String(initialData.points ?? 100),
+        status: initialData.status || "published",
       }
       : { ...emptyForm },
   );
-
-  const [
-    selectedStudentIds,
-    setSelectedStudentIds,
-  ] = useState([]);
-
   const [file, setFile] = useState(null);
-
-  const [
-    removeExistingFile,
-    setRemoveExistingFile,
-  ] = useState(false);
-
-  const [fileError, setFileError] =
-    useState("");
-
-  useEffect(() => {
-    if (students.length === 0) {
-      setSelectedStudentIds([]);
-      return;
-    }
-
-    if (initialData) {
-      const accessibleStudentIds =
-        existingAccess
-          .filter((record) => record.can_access)
-          .map((record) => record.student_id);
-
-      /*
-       * Older activities may not have access records.
-       * In that situation, select all students.
-       */
-      setSelectedStudentIds(
-        existingAccess.length > 0
-          ? accessibleStudentIds
-          : students.map(
-            (student) => student.student_id,
-          ),
-      );
-
-      return;
-    }
-
-    setSelectedStudentIds(
-      students.map(
-        (student) => student.student_id,
-      ),
-    );
-  }, [
-    initialData,
-    students,
-    existingAccess,
-  ]);
-
-  const allStudentsSelected =
-    students.length > 0 &&
-    selectedStudentIds.length ===
-    students.length;
+  const [removeExistingFile, setRemoveExistingFile] = useState(false);
+  const [fileError, setFileError] = useState("");
+  const [quizError, setQuizError] = useState("");
+  const [quizQuestions, setQuizQuestions] = useState(() =>
+    isEditing ? [] : [createEmptyQuizQuestion()],
+  );
+  const [accessSettings, setAccessSettings] = useState({
+    selectedStudentIds: [],
+    lateAllowedStudentIds: [],
+    attendanceByStudent: {},
+    attendanceDate: null,
+  });
 
   function update(field, value) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  }
+    setForm((current) => ({ ...current, [field]: value }));
 
-  function toggleAllStudents() {
-    if (allStudentsSelected) {
-      setSelectedStudentIds([]);
-      return;
+    if (field === "activity_type") {
+      setQuizError("");
     }
-
-    setSelectedStudentIds(
-      students.map(
-        (student) => student.student_id,
-      ),
-    );
-  }
-
-  function toggleStudent(studentId) {
-    setSelectedStudentIds((current) => {
-      if (current.includes(studentId)) {
-        return current.filter(
-          (id) => id !== studentId,
-        );
-      }
-
-      return [...current, studentId];
-    });
   }
 
   function chooseFile(event) {
-    const selectedFile =
-      event.target.files?.[0] || null;
-
-    const validationError =
-      validateFile(selectedFile);
-
+    const selectedFile = event.target.files?.[0] || null;
+    const validationError = validateFile(selectedFile);
     if (validationError) {
       setFile(null);
       setFileError(validationError);
       event.target.value = "";
       return;
     }
-
     setFile(selectedFile);
     setFileError("");
     setRemoveExistingFile(false);
@@ -339,72 +239,52 @@ function ActivityForm({
 
   function submit(event) {
     event.preventDefault();
+    const isNewQuiz = !isEditing && form.activity_type === "quiz";
+    let preparedQuestions = [];
 
-    const customActivityType =
-      form.custom_activity_type.trim();
-
-    if (
-      !form.title.trim() ||
-      !form.due_at ||
-      Number(form.points) <= 0 ||
-      fileError
-    ) {
-      return;
+    if (isNewQuiz) {
+      try {
+        preparedQuestions = prepareQuizQuestions(quizQuestions);
+        setQuizError("");
+      } catch (validationError) {
+        setQuizError(validationError.message);
+        return;
+      }
     }
 
-    if (
-      form.activity_type === "other" &&
-      (customActivityType.length < 2 ||
-        customActivityType.length > 50)
-    ) {
-      setFileError(
-        "Custom activity type must contain between 2 and 50 characters.",
-      );
+    const maximumPoints = isNewQuiz
+      ? preparedQuestions.reduce(
+        (total, question) => total + Number(question.points),
+        0,
+      )
+      : Number(form.points);
+
+    if (!form.title.trim() || !form.due_at || maximumPoints <= 0 || fileError) {
       return;
     }
 
     onSave({
-      /*
-       * Custom activities are stored as assignments
-       * internally so existing gradebook rules and
-       * database constraints continue to work.
-       */
-      activity_type:
-        form.activity_type === "other"
-          ? "assignment"
-          : form.activity_type,
-
-      custom_activity_type:
-        form.activity_type === "other"
-          ? customActivityType
-          : null,
-      grading_period: Number(
-        form.grading_period,
-      ),
+      activity_type: form.activity_type,
+      grading_period: Number(form.grading_period),
       title: form.title.trim(),
-      instructions:
-        form.instructions.trim() || null,
-      due_at: new Date(
-        form.due_at,
-      ).toISOString(),
-      points: Number(form.points),
+      instructions: form.instructions.trim() || null,
+      due_at: new Date(form.due_at).toISOString(),
+      points: maximumPoints,
       status: form.status,
-      selectedStudentIds,
+      selectedStudentIds: accessSettings.selectedStudentIds,
+      lateAllowedStudentIds: accessSettings.lateAllowedStudentIds,
+      attendanceByStudent: accessSettings.attendanceByStudent,
+      attendanceDate: accessSettings.attendanceDate,
       instructionFile: file,
       removeExistingFile,
+      quizQuestions: preparedQuestions,
     });
   }
 
-  const showExisting =
-    initialData?.file_path &&
-    !removeExistingFile &&
-    !file;
+  const showExisting = initialData?.file_path && !removeExistingFile && !file;
 
   return (
-    <form
-      onSubmit={submit}
-      className="space-y-4"
-    >
+    <form onSubmit={submit} className="space-y-4">
       {(error || fileError) && (
         <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
           {fileError || error}
@@ -415,79 +295,25 @@ function ActivityForm({
         <select
           className={inputClass}
           value={form.activity_type}
-          onChange={(event) => {
-            const nextType = event.target.value;
-
-            setForm((current) => ({
-              ...current,
-              activity_type: nextType,
-              custom_activity_type:
-                nextType === "other"
-                  ? current.custom_activity_type
-                  : "",
-            }));
-          }}
+          onChange={(e) => update("activity_type", e.target.value)}
+          disabled={isEditing}
           required
         >
-          <option value="assignment">
-            Assignment
-          </option>
-
-          <option value="performance_task">
-            Performance Task
-          </option>
-
-          <option value="quiz">
-            Quiz
-          </option>
-
-          <option value="other">
-            Other
-          </option>
+          <option value="assignment">Assignment</option>
+          <option value="performance_task">Performance Task</option>
+          <option value="quiz">Quiz</option>
         </select>
       </Field>
-
-      {form.activity_type === "other" && (
-        <Field label="Custom activity type" required>
-          <input
-            className={inputClass}
-            value={form.custom_activity_type}
-            onChange={(event) =>
-              update(
-                "custom_activity_type",
-                event.target.value,
-              )
-            }
-            placeholder="Example: Laboratory Activity"
-            minLength={2}
-            maxLength={50}
-            required
-          />
-
-          <p className="mt-1 text-xs text-gray-400">
-            Enter the activity category that students
-            will see.
-          </p>
-        </Field>
-      )}
 
       <Field label="Grading period" required>
         <select
           className={inputClass}
           value={form.grading_period}
-          onChange={(event) =>
-            update(
-              "grading_period",
-              event.target.value,
-            )
-          }
+          onChange={(event) => update("grading_period", event.target.value)}
           required
         >
           {gradingPeriods.map((period) => (
-            <option
-              key={period.value}
-              value={period.value}
-            >
+            <option key={period.value} value={period.value}>
               {period.label}
             </option>
           ))}
@@ -498,9 +324,7 @@ function ActivityForm({
         <input
           className={inputClass}
           value={form.title}
-          onChange={(event) =>
-            update("title", event.target.value)
-          }
+          onChange={(e) => update("title", e.target.value)}
           placeholder="Enter the activity title"
           maxLength={180}
           required
@@ -511,12 +335,7 @@ function ActivityForm({
         <textarea
           className={`${inputClass} min-h-28 resize-y`}
           value={form.instructions}
-          onChange={(event) =>
-            update(
-              "instructions",
-              event.target.value,
-            )
-          }
+          onChange={(e) => update("instructions", e.target.value)}
           placeholder="Describe what students need to do..."
         />
       </Field>
@@ -526,25 +345,17 @@ function ActivityForm({
           {showExisting && (
             <div className="mb-3 flex items-center gap-3 rounded-lg border bg-white p-3">
               <Paperclip className="h-5 w-5 shrink-0 text-blue-600" />
-
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-gray-700">
-                  {initialData.file_name ||
-                    "Instruction file"}
+                  {initialData.file_name || "Instruction file"}
                 </p>
-
                 <p className="text-xs text-gray-400">
-                  {formatFileSize(
-                    initialData.file_size,
-                  )}
+                  {formatFileSize(initialData.file_size)}
                 </p>
               </div>
-
               <button
                 type="button"
-                onClick={() =>
-                  setRemoveExistingFile(true)
-                }
+                onClick={() => setRemoveExistingFile(true)}
                 className="text-xs font-medium text-red-600 hover:underline"
               >
                 Remove
@@ -555,17 +366,14 @@ function ActivityForm({
           {file && (
             <div className="mb-3 flex items-center gap-3 rounded-lg border border-blue-100 bg-blue-50 p-3">
               <Paperclip className="h-5 w-5 shrink-0 text-blue-600" />
-
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-gray-700">
                   {file.name}
                 </p>
-
                 <p className="text-xs text-gray-500">
                   {formatFileSize(file.size)}
                 </p>
               </div>
-
               <button
                 type="button"
                 onClick={() => setFile(null)}
@@ -578,11 +386,9 @@ function ActivityForm({
 
           <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-medium text-blue-600 shadow-sm ring-1 ring-gray-200 hover:bg-blue-50">
             <Upload className="h-4 w-4" />
-
             {showExisting || file
               ? "Choose another file"
               : "Choose instruction file"}
-
             <input
               type="file"
               accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -590,48 +396,63 @@ function ActivityForm({
               className="sr-only"
             />
           </label>
-
           <p className="mt-2 text-center text-xs text-gray-400">
-            PDF, DOC, or DOCX only. Maximum size:
-            10 MB.
+            PDF, DOC, or DOCX only. Maximum size: 10 MB.
           </p>
         </div>
       </Field>
 
+      {!isEditing && form.activity_type === "quiz" && (
+        <QuizQuestionDraftBuilder
+          questions={quizQuestions}
+          onChange={(questions) => {
+            setQuizQuestions(questions);
+            setQuizError("");
+          }}
+          disabled={saving}
+          error={quizError}
+        />
+      )}
+
+      {isEditing && form.activity_type === "quiz" && (
+        <div className="rounded-xl border border-purple-100 bg-purple-50 px-4 py-3 text-sm text-purple-700">
+          Use the <strong>Edit Questions</strong> button on the quiz card to
+          update its existing questions and answer keys.
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field
-          label="Due date and time"
-          required
-        >
+        <Field label="Due date and time" required>
           <input
             className={inputClass}
             type="datetime-local"
             value={form.due_at}
-            onChange={(event) =>
-              update(
-                "due_at",
-                event.target.value,
-              )
-            }
+            onChange={(e) => update("due_at", e.target.value)}
             required
           />
         </Field>
-
         <Field label="Maximum points" required>
-          <input
-            className={inputClass}
-            type="number"
-            min="1"
-            step="0.01"
-            value={form.points}
-            onChange={(event) =>
-              update(
-                "points",
-                event.target.value,
-              )
-            }
-            required
-          />
+          {!isEditing && form.activity_type === "quiz" ? (
+            <input
+              className={`${inputClass} cursor-not-allowed bg-purple-50 font-semibold text-purple-700`}
+              type="number"
+              value={quizQuestions.reduce(
+                (total, question) => total + (Number(question.points) || 0),
+                0,
+              )}
+              readOnly
+            />
+          ) : (
+            <input
+              className={inputClass}
+              type="number"
+              min="1"
+              step="0.01"
+              value={form.points}
+              onChange={(e) => update("points", e.target.value)}
+              required
+            />
+          )}
         </Field>
       </div>
 
@@ -639,126 +460,31 @@ function ActivityForm({
         <select
           className={inputClass}
           value={form.status}
-          onChange={(event) =>
-            update("status", event.target.value)
-          }
+          onChange={(e) => update("status", e.target.value)}
           required
         >
-          <option value="published">
-            Published — visible to selected students
-          </option>
-
-          <option value="draft">
-            Draft — teacher only
-          </option>
-
-          <option value="hidden">
-            Hidden — unavailable to students
-          </option>
+          <option value="published">Published — visible to students</option>
+          <option value="draft">Draft — teacher only</option>
         </select>
       </Field>
 
       <Field label="Student access">
         <p className="mb-3 text-xs leading-5 text-gray-500">
-          All students are selected automatically.
-          Uncheck absent students so they cannot view
-          the activity. They will appear as Missing —
-          Absent in the gradebook.
+          Access is based automatically on attendance for the activity
+          publication date. Absent students cannot access the activity unless
+          you allow late submission.
         </p>
 
-        {studentsError && (
-          <div className="mb-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {studentsError}
-          </div>
-        )}
-
-        {studentsLoading ? (
-          <div className="rounded-xl border border-gray-200 p-6 text-center text-sm text-gray-400">
-            Loading students...
-          </div>
-        ) : (
-          <div className="overflow-hidden rounded-xl border border-gray-200">
-            <label className="flex cursor-pointer items-center gap-3 border-b border-gray-200 bg-blue-50 p-3">
-              <input
-                type="checkbox"
-                checked={allStudentsSelected}
-                onChange={toggleAllStudents}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600"
-              />
-
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-blue-700">
-                  Select all students
-                </p>
-
-                <p className="text-xs text-blue-500">
-                  {selectedStudentIds.length} of{" "}
-                  {students.length} selected
-                </p>
-              </div>
-            </label>
-
-            <div className="max-h-64 overflow-y-auto">
-              {students.map((student) => {
-                const checked =
-                  selectedStudentIds.includes(
-                    student.student_id,
-                  );
-
-                return (
-                  <label
-                    key={student.student_id}
-                    className={`flex cursor-pointer items-center gap-3 border-b border-gray-100 p-3 last:border-b-0 ${checked
-                      ? "bg-white"
-                      : "bg-red-50"
-                      }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() =>
-                        toggleStudent(
-                          student.student_id,
-                        )
-                      }
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600"
-                    />
-
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-800">
-                        {student.full_name ||
-                          "Unnamed student"}
-                      </p>
-
-                      <p className="text-xs text-gray-400">
-                        {student.student_number ||
-                          "No student number"}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${checked
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                        }`}
-                    >
-                      {checked
-                        ? "Can access"
-                        : "Absent"}
-                    </span>
-                  </label>
-                );
-              })}
-
-              {students.length === 0 && (
-                <p className="p-6 text-center text-sm text-gray-400">
-                  No students are assigned to this
-                  section.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
+        <ActivityAttendanceAccessPicker
+          classRecordId={classRecordId}
+          students={students}
+          studentsLoading={studentsLoading}
+          studentsError={studentsError}
+          initialData={initialData}
+          existingAccess={existingAccess}
+          disabled={saving}
+          onChange={setAccessSettings}
+        />
       </Field>
 
       <div className="flex gap-3 pt-2">
@@ -770,21 +496,18 @@ function ActivityForm({
         >
           Cancel
         </button>
-
         <button
           type="submit"
-          disabled={
-            saving ||
-            Boolean(fileError) ||
-            studentsLoading
-          }
-          className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={saving || Boolean(fileError)}
+          className="flex-1 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
         >
           {saving
             ? "Saving..."
-            : initialData
+            : isEditing
               ? "Save Changes"
-              : "Create"}
+              : form.activity_type === "quiz"
+                ? "Create Quiz"
+                : "Create"}
         </button>
       </div>
     </form>
@@ -793,165 +516,129 @@ function ActivityForm({
 
 function ActivityCard({
   activity,
+  onDownload,
   onEdit,
   onDelete,
   onViewSubmissions,
   onManageQuiz,
   deleting,
+  downloading,
 }) {
-  const type = getActivityType(activity);
-
+  const type = types[activity.activity_type] || types.assignment;
   const TypeIcon = type.icon;
   const due = dueState(activity.due_at);
 
   return (
     <article className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
+        <div className="flex min-w-0 items-start gap-3">
           <div
             className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${type.iconStyle}`}
           >
             <TypeIcon className="h-5 w-5" />
           </div>
-
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={`rounded-full px-2.5 py-1 text-xs font-medium ${type.badge}`}
               >
                 {type.label}
               </span>
-
               <span
                 className={`rounded-full px-2.5 py-1 text-xs font-medium ${due.style}`}
               >
                 {due.label}
               </span>
-
               <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-xs font-medium text-cyan-700">
-                {gradingLabel(
-                  activity.grading_period,
-                )}
+                {gradingLabel(activity.grading_period)}
               </span>
-
-              {activity.status ===
-                "draft" && (
-                  <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-                    Draft
-                  </span>
-                )}
+              {activity.status === "draft" && (
+                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                  Draft
+                </span>
+              )}
             </div>
-
             <h3 className="mt-2 text-base font-semibold text-gray-900">
               {activity.title}
             </h3>
-
             {activity.instructions && (
               <p className="mt-1 whitespace-pre-line text-sm leading-6 text-gray-500">
                 {activity.instructions}
               </p>
             )}
-
             <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-gray-500">
               <span className="flex items-center gap-1.5">
                 <CalendarClock className="h-4 w-4" />
-
-                Due{" "}
-                {formatDueDate(
-                  activity.due_at,
-                )}
+                Due {formatDueDate(activity.due_at)}
               </span>
-
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4" />
-
-                {Number(activity.points)}{" "}
-                points
+                {Number(activity.points)} points
               </span>
             </div>
-
             {activity.file_path && (
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <FilePreviewLink
-                  bucket={BUCKET}
-                  path={
-                    activity.file_path
-                  }
-                  fileName={
-                    activity.file_name
-                      ? `View ${activity.file_name}`
-                      : "View instructions"
-                  }
-                />
-
-                {activity.file_size && (
-                  <span className="text-xs text-gray-400">
-                    {formatFileSize(
-                      activity.file_size,
-                    )}
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {activity.activity_type ===
-                "quiz" && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onManageQuiz(activity)
-                    }
-                    className="inline-flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100"
-                  >
-                    <HelpCircle className="h-4 w-4" />
-                    Manage Quiz
-                  </button>
-                )}
-
               <button
                 type="button"
-                onClick={() =>
-                  onViewSubmissions(
-                    activity,
-                  )
-                }
+                onClick={() => onDownload(activity)}
+                disabled={downloading}
+                className="mt-4 inline-flex max-w-full items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+              >
+                {downloading ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                <span className="truncate">
+                  {activity.file_name || "Download instructions"}
+                </span>
+                {activity.file_size && (
+                  <span className="shrink-0 text-xs text-blue-500">
+                    {formatFileSize(activity.file_size)}
+                  </span>
+                )}
+              </button>
+            )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {activity.activity_type === "quiz" && (
+                <button
+                  type="button"
+                  onClick={() => onManageQuiz(activity)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  Edit Questions
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onViewSubmissions(activity)}
                 className="inline-flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100"
               >
                 <ListChecks className="h-4 w-4" />
-                View Submissions
+                {activity.activity_type === "quiz"
+                  ? "View Attempts"
+                  : "View Submissions"}
               </button>
             </div>
           </div>
         </div>
-
-        <div className="flex shrink-0 gap-1">
+        <div className="flex shrink-0 gap-1 self-end sm:self-start">
           <button
             type="button"
-            onClick={() =>
-              onEdit(activity)
-            }
-            disabled={deleting}
+            onClick={() => onEdit(activity)}
+            className="rounded-lg p-2 text-gray-400 hover:bg-gray-50 hover:text-blue-600"
             aria-label={`Edit ${activity.title}`}
-            className="rounded-lg p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50"
           >
             <Pencil className="h-4 w-4" />
           </button>
-
           <button
             type="button"
-            onClick={() =>
-              onDelete(activity)
-            }
+            onClick={() => onDelete(activity)}
             disabled={deleting}
-            aria-label={`Delete ${activity.title}`}
             className="rounded-lg p-2 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+            aria-label={`Delete ${activity.title}`}
           >
-            {deleting ? (
-              <RefreshCw className="h-4 w-4 animate-spin" />
-            ) : (
-              <Trash2 className="h-4 w-4" />
-            )}
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -960,25 +647,20 @@ function ActivityCard({
 }
 
 export default function TeacherAssignmentsTab({ classRecord }) {
-
   const {
     students,
     loading: studentsLoading,
     error: studentsError,
-    reload: reloadStudents,
   } = useClassStudents(classRecord.id);
 
-  const [
-    existingStudentAccess,
-    setExistingStudentAccess,
-  ] = useState([]);
-
+  const [existingStudentAccess, setExistingStudentAccess] = useState([]);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState("");
   const [actionError, setActionError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
   const [modalMode, setModalMode] = useState(null);
   const [selected, setSelected] = useState(null);
   const [typeFilter, setTypeFilter] = useState("all");
@@ -989,7 +671,11 @@ export default function TeacherAssignmentsTab({ classRecord }) {
     if (!classRecord?.id) return;
     setLoading(true);
     setPageError("");
-    const { data, error } = await supabase.from("class_activities").select("*").eq("teaching_assignment_id", classRecord.id).order("due_at");
+    const { data, error } = await supabase
+      .from("class_activities")
+      .select("*")
+      .eq("teaching_assignment_id", classRecord.id)
+      .order("due_at");
     if (error) {
       console.error(error);
       setActivities([]);
@@ -998,70 +684,83 @@ export default function TeacherAssignmentsTab({ classRecord }) {
     setLoading(false);
   }
 
-  useEffect(() => { loadActivities(); }, [classRecord?.id]);
+  useEffect(() => {
+    loadActivities();
+  }, [classRecord?.id]);
 
   const visibleActivities = useMemo(
-    () => activities.filter((item) => {
-      const isOther = Boolean(
-        item.custom_activity_type?.trim(),
-      );
-
-      const matchesType =
-        typeFilter === "all" ||
-        (typeFilter === "other" && isOther) ||
-        (typeFilter !== "other" &&
-          !isOther &&
-          item.activity_type === typeFilter);
-      const matchesGrading =
-        gradingFilter === "all" ||
-        Number(item.grading_period) === Number(gradingFilter);
-      return matchesType && matchesGrading;
-    }),
+    () =>
+      activities.filter((item) => {
+        const matchesType =
+          typeFilter === "all" || item.activity_type === typeFilter;
+        const matchesGrading =
+          gradingFilter === "all" ||
+          Number(item.grading_period) === Number(gradingFilter);
+        return matchesType && matchesGrading;
+      }),
     [activities, typeFilter, gradingFilter],
   );
   const counts = useMemo(
     () => ({
       all: activities.length,
-
       assignment: activities.filter(
-        (item) =>
-          item.activity_type === "assignment" &&
-          !item.custom_activity_type?.trim(),
+        (item) => item.activity_type === "assignment",
       ).length,
-
       performance_task: activities.filter(
-        (item) =>
-          item.activity_type ===
-          "performance_task" &&
-          !item.custom_activity_type?.trim(),
+        (item) => item.activity_type === "performance_task",
       ).length,
-
-      quiz: activities.filter(
-        (item) =>
-          item.activity_type === "quiz" &&
-          !item.custom_activity_type?.trim(),
-      ).length,
-
-      other: activities.filter((item) =>
-        Boolean(item.custom_activity_type?.trim()),
-      ).length,
+      quiz: activities.filter((item) => item.activity_type === "quiz").length,
     }),
     [activities],
   );
 
   function closeModal() {
     if (saving) return;
-
     setModalMode(null);
     setSelected(null);
     setExistingStudentAccess([]);
     setActionError("");
   }
 
+  async function openEditModal(activity) {
+    setSelected(activity);
+    setExistingStudentAccess([]);
+    setActionError("");
+    setModalMode("edit");
+
+    try {
+      const { data, error } = await supabase
+        .from("activity_students")
+        .select(
+          `
+          student_id,
+          can_access,
+          activity_status,
+          exclusion_reason,
+          attendance_status,
+          attendance_date,
+          late_submission_allowed,
+          late_allowed_at
+        `,
+        )
+        .eq("activity_id", activity.id);
+
+      if (error) throw error;
+      setExistingStudentAccess(data || []);
+    } catch (error) {
+      console.error("Failed to load activity student access:", error);
+      setActionError(
+        error.message || "Unable to load the activity's student access.",
+      );
+    }
+  }
+
   async function uploadFile(file) {
     const validationError = validateFile(file);
     if (validationError) throw new Error(validationError);
-    const uniqueId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const uniqueId =
+      globalThis.crypto?.randomUUID?.() ||
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const path = `${classRecord.id}/${uniqueId}-${safeFileName(file.name)}`;
     const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
       cacheControl: "3600",
@@ -1072,92 +771,73 @@ export default function TeacherAssignmentsTab({ classRecord }) {
     return path;
   }
 
-  async function openEditModal(activity) {
-    setSelected(activity);
-    setActionError("");
-    setExistingStudentAccess([]);
-    setModalMode("edit");
+  async function createQuizQuestionRecords(activityId, questions) {
+    const questionRows = questions.map((question) => ({
+      activity_id: activityId,
+      question_type: question.question_type,
+      question_text: question.question_text,
+      options: question.options,
+      points: question.points,
+      position: question.position,
+    }));
 
-    try {
-      const { data, error } = await supabase
-        .from("activity_students")
-        .select(`
-        student_id,
-        can_access,
-        activity_status,
-        exclusion_reason
-      `)
-        .eq("activity_id", activity.id);
+    const { data: savedQuestions, error: questionError } = await supabase
+      .from("quiz_questions")
+      .insert(questionRows)
+      .select("id, position, question_type");
 
-      if (error) throw error;
+    if (questionError) throw questionError;
 
-      setExistingStudentAccess(data || []);
-    } catch (accessError) {
-      console.error(
-        "Failed to load activity access:",
-        accessError,
-      );
+    const answerKeys = (savedQuestions || [])
+      .filter((question) => question.question_type !== "short_answer")
+      .map((question) => {
+        const draft = questions.find(
+          (item) => Number(item.position) === Number(question.position),
+        );
 
-      setActionError(
-        accessError.message ||
-        "Unable to load student access.",
-      );
+        return {
+          question_id: question.id,
+          correct_answer: draft.correct_answer,
+          case_sensitive: draft.case_sensitive,
+        };
+      });
+
+    if (answerKeys.length > 0) {
+      const { error: keyError } = await supabase
+        .from("quiz_answer_keys")
+        .insert(answerKeys);
+
+      if (keyError) throw keyError;
     }
   }
 
   async function handleSave(values) {
     setSaving(true);
     setActionError("");
-
     const {
       instructionFile,
       removeExistingFile,
+      quizQuestions,
       selectedStudentIds,
+      lateAllowedStudentIds,
+      attendanceByStudent,
+      attendanceDate,
       ...databaseValues
     } = values;
-
-    /*
- * Keep the old status column and the new
- * publication_status column synchronized.
- *
- * This supports the existing student queries
- * that still use status while notification
- * triggers use publication_status.
- */
-    const selectedPublicationStatus =
-      values.publication_status ||
-      values.status ||
-      "draft";
-
-    databaseValues.status =
-      selectedPublicationStatus;
-
-    databaseValues.publication_status =
-      selectedPublicationStatus;
-
-    const oldPath =
-      selected?.file_path || null;
-
+    const oldPath = selected?.file_path || null;
     let newPath = null;
-    let savedActivity = null;
+    let createdActivityId = null;
 
     try {
       if (instructionFile) {
-        newPath =
-          await uploadFile(instructionFile);
-
+        newPath = await uploadFile(instructionFile);
         Object.assign(databaseValues, {
           file_path: newPath,
           file_name: instructionFile.name,
-          file_type:
-            instructionFile.type ||
-            "application/octet-stream",
+          file_type: instructionFile.type || "application/octet-stream",
           file_size: instructionFile.size,
         });
-      } else if (
-        modalMode === "edit" &&
-        removeExistingFile
-      ) {
+      } else if (modalMode === "edit" && removeExistingFile) {
         Object.assign(databaseValues, {
           file_path: null,
           file_name: null,
@@ -1166,194 +846,192 @@ export default function TeacherAssignmentsTab({ classRecord }) {
         });
       }
 
-      let activityQuery;
+      const isNewQuiz =
+        modalMode === "create" && databaseValues.activity_type === "quiz";
+      const requestedStatus = databaseValues.status;
+      const valuesToSave = isNewQuiz
+        ? { ...databaseValues, status: "draft" }
+        : databaseValues;
 
-      if (modalMode === "edit") {
-        activityQuery = supabase
-          .from("class_activities")
-          .update(databaseValues)
-          .eq("id", selected.id)
-          .eq(
-            "teaching_assignment_id",
-            classRecord.id,
-          );
-      } else {
-        activityQuery = supabase
-          .from("class_activities")
-          .insert({
-            teaching_assignment_id:
-              classRecord.id,
-            ...databaseValues,
+      const query =
+        modalMode === "edit"
+          ? supabase
+            .from("class_activities")
+            .update(valuesToSave)
+            .eq("id", selected.id)
+            .eq("teaching_assignment_id", classRecord.id)
+          : supabase.from("class_activities").insert({
+            teaching_assignment_id: classRecord.id,
+            ...valuesToSave,
           });
+
+      let { data, error } = await query.select().single();
+      if (error) throw error;
+
+      if (modalMode === "create") {
+        createdActivityId = data.id;
       }
 
-      const {
-        data: activityData,
-        error: activityError,
-      } = await activityQuery
-        .select("*")
-        .single();
+      if (isNewQuiz) {
+        await createQuizQuestionRecords(data.id, quizQuestions);
 
-      if (activityError) {
-        throw activityError;
+        if (requestedStatus !== "draft") {
+          const { data: publishedActivity, error: publishError } =
+            await supabase
+              .from("class_activities")
+              .update({ status: requestedStatus })
+              .eq("id", data.id)
+              .eq("teaching_assignment_id", classRecord.id)
+              .select()
+              .single();
+
+          if (publishError) throw publishError;
+          data = publishedActivity;
+        }
       }
 
-      savedActivity = activityData;
+      const { data: currentAccessRows, error: currentAccessError } =
+        await supabase
+          .from("activity_students")
+          .select("student_id, activity_status")
+          .eq("activity_id", data.id);
 
-      /*
-       * Load current access records so submitted and
-       * graded statuses are not erased while editing.
-       */
-      const {
-        data: currentAccessRows,
-        error: currentAccessError,
-      } = await supabase
-        .from("activity_students")
-        .select(`
-        student_id,
-        activity_status
-      `)
-        .eq("activity_id", savedActivity.id);
-
-      if (currentAccessError) {
-        throw currentAccessError;
-      }
+      if (currentAccessError) throw currentAccessError;
 
       const statusByStudent = new Map(
-        (currentAccessRows || []).map(
-          (record) => [
-            record.student_id,
-            record.activity_status,
-          ],
-        ),
+        (currentAccessRows || []).map((record) => [
+          record.student_id,
+          record.activity_status,
+        ]),
       );
 
-      const accessRows = students.map(
-        (student) => {
-          const studentId =
-            student.student_id;
+      const accessRows = students.map((student) => {
+        const studentId = student.student_id;
+        const attendanceStatus =
+          attendanceByStudent[studentId]?.status || "present";
+        const isAbsent = attendanceStatus === "absent";
+        const lateSubmissionAllowed = lateAllowedStudentIds.includes(studentId);
+        const selectedForActivity = selectedStudentIds.includes(studentId);
+        const canAccess =
+          selectedForActivity && (!isAbsent || lateSubmissionAllowed);
+        const previousStatus = statusByStudent.get(studentId);
 
-          const selectedForActivity =
-            selectedStudentIds.includes(
-              studentId,
-            );
+        let activityStatus;
+        if (previousStatus === "submitted" || previousStatus === "graded") {
+          activityStatus = previousStatus;
+        } else if (canAccess) {
+          activityStatus = "assigned";
+        } else {
+          activityStatus = "missing";
+        }
 
-          const previousStatus =
-            statusByStudent.get(studentId);
-
-          let activityStatus;
-
-          if (!selectedForActivity) {
-            activityStatus = "missing";
-          } else if (
-            previousStatus === "submitted" ||
-            previousStatus === "graded"
-          ) {
-            activityStatus = previousStatus;
-          } else {
-            activityStatus = "assigned";
-          }
-
-          return {
-            activity_id: savedActivity.id,
-            student_id: studentId,
-            can_access:
-              selectedForActivity,
-            activity_status:
-              activityStatus,
-            exclusion_reason:
-              selectedForActivity
-                ? null
-                : "absent",
-            updated_at:
-              new Date().toISOString(),
-          };
-        },
-      );
+        return {
+          activity_id: data.id,
+          student_id: studentId,
+          can_access: canAccess,
+          activity_status: activityStatus,
+          attendance_status: attendanceStatus,
+          attendance_date: attendanceDate,
+          late_submission_allowed: lateSubmissionAllowed,
+          exclusion_reason: isAbsent ? "absent" : null,
+          updated_at: new Date().toISOString(),
+        };
+      });
 
       if (accessRows.length > 0) {
-        const { error: accessError } =
-          await supabase
-            .from("activity_students")
-            .upsert(accessRows, {
-              onConflict:
-                "activity_id,student_id",
-            });
+        const { error: accessError } = await supabase
+          .from("activity_students")
+          .upsert(accessRows, {
+            onConflict: "activity_id,student_id",
+          });
 
-        if (accessError) {
-          throw accessError;
-        }
+        if (accessError) throw accessError;
       }
 
-      if (
-        oldPath &&
-        oldPath !== savedActivity.file_path
-      ) {
-        const { error: cleanupError } =
-          await supabase.storage
-            .from(BUCKET)
-            .remove([oldPath]);
-
-        if (cleanupError) {
-          console.error(
-            "Old file cleanup failed:",
-            cleanupError,
-          );
-        }
+      if (oldPath && oldPath !== data.file_path) {
+        const { error: cleanupError } = await supabase.storage
+          .from(BUCKET)
+          .remove([oldPath]);
+        if (cleanupError)
+          console.error("Old file cleanup failed:", cleanupError);
       }
 
       setActivities((current) => {
         const next =
           modalMode === "edit"
-            ? current.map((item) =>
-              item.id === savedActivity.id
-                ? savedActivity
-                : item,
-            )
-            : [...current, savedActivity];
-
-        return next.sort(
-          (first, second) =>
-            new Date(first.due_at) -
-            new Date(second.due_at),
-        );
+            ? current.map((item) => (item.id === data.id ? data : item))
+            : [...current, data];
+        return next.sort((a, b) => new Date(a.due_at) - new Date(b.due_at));
       });
-
       setModalMode(null);
       setSelected(null);
       setExistingStudentAccess([]);
-    } catch (saveError) {
-      if (newPath && !savedActivity) {
-        await supabase.storage
-          .from(BUCKET)
-          .remove([newPath]);
+    } catch (error) {
+      if (createdActivityId) {
+        const { error: rollbackError } = await supabase
+          .from("class_activities")
+          .delete()
+          .eq("id", createdActivityId)
+          .eq("teaching_assignment_id", classRecord.id);
+
+        if (rollbackError) {
+          console.error("Quiz activity rollback failed:", rollbackError);
+        }
       }
 
-      console.error(
-        "Activity save failed:",
-        saveError,
-      );
-
-      setActionError(
-        saveError.message ||
-        "Unable to save the activity.",
-      );
+      if (newPath) await supabase.storage.from(BUCKET).remove([newPath]);
+      console.error("Activity save failed:", {
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        code: error?.code,
+      });
+      setActionError(error.message || "Unable to save the activity.");
     } finally {
       setSaving(false);
     }
   }
 
+  async function handleDownload(activity) {
+    setDownloadingId(activity.id);
+    setPageError("");
+    const { data, error } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(activity.file_path, 60, {
+        download: activity.file_name || "instructions",
+      });
+    if (error)
+      setPageError(error.message || "Unable to download the instruction file.");
+    else {
+      const link = document.createElement("a");
+      link.href = data.signedUrl;
+      link.download = activity.file_name || "instructions";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+    setDownloadingId(null);
+  }
+
   async function handleDelete(activity) {
     if (!window.confirm(`Permanently delete “${activity.title}”?`)) return;
     setDeletingId(activity.id);
-    const { error } = await supabase.from("class_activities").delete().eq("id", activity.id).eq("teaching_assignment_id", classRecord.id);
+    const { error } = await supabase
+      .from("class_activities")
+      .delete()
+      .eq("id", activity.id)
+      .eq("teaching_assignment_id", classRecord.id);
     if (error) setPageError(error.message || "Unable to delete the activity.");
     else {
       if (activity.file_path) {
-        const { error: cleanupError } = await supabase.storage.from(BUCKET).remove([activity.file_path]);
+        const { error: cleanupError } = await supabase.storage
+          .from(BUCKET)
+          .remove([activity.file_path]);
         if (cleanupError) console.error("File cleanup failed:", cleanupError);
       }
-      setActivities((current) => current.filter((item) => item.id !== activity.id));
+      setActivities((current) =>
+        current.filter((item) => item.id !== activity.id),
+      );
     }
     setDeletingId(null);
   }
@@ -1388,15 +1066,41 @@ export default function TeacherAssignmentsTab({ classRecord }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-bold text-gray-900">Class Activities</h2>
-          <p className="text-sm text-gray-500">Create activities and attach PDF or Word instruction files.</p>
+          <p className="text-sm text-gray-500">
+            Create activities and attach PDF or Word instruction files.
+          </p>
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={loadActivities} disabled={loading} className="rounded-lg border border-gray-200 bg-white p-2.5 text-gray-600 hover:bg-gray-50 disabled:opacity-50" aria-label="Refresh"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button>
-          <button type="button" onClick={() => { setSelected(null); setActionError(""); setModalMode("create"); }} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"><Plus className="h-4 w-4" />Create Activity</button>
+          <button
+            type="button"
+            onClick={loadActivities}
+            disabled={loading}
+            className="rounded-lg border border-gray-200 bg-white p-2.5 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+            aria-label="Refresh"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelected(null);
+              setExistingStudentAccess([]);
+              setActionError("");
+              setModalMode("create");
+            }}
+            className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Create Activity
+          </button>
         </div>
       </div>
 
-      {pageError && <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{pageError}</div>}
+      {pageError && (
+        <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {pageError}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {[
@@ -1404,9 +1108,15 @@ export default function TeacherAssignmentsTab({ classRecord }) {
           ["assignment", "Assignments"],
           ["performance_task", "Performance Tasks"],
           ["quiz", "Quizzes"],
-          ["other", "Other"],
         ].map(([value, label]) => (
-          <button key={value} type="button" onClick={() => setTypeFilter(value)} className={`rounded-full px-3 py-1.5 text-xs font-medium ${typeFilter === value ? "bg-slate-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>{label} ({counts[value]})</button>
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTypeFilter(value)}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium ${typeFilter === value ? "bg-slate-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+          >
+            {label} ({counts[value]})
+          </button>
         ))}
       </div>
 
@@ -1415,8 +1125,8 @@ export default function TeacherAssignmentsTab({ classRecord }) {
           type="button"
           onClick={() => setGradingFilter("all")}
           className={`rounded-full px-3 py-1.5 text-xs font-medium ${gradingFilter === "all"
-            ? "bg-cyan-700 text-white"
-            : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
+              ? "bg-cyan-700 text-white"
+              : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
             }`}
         >
           All Grading Periods
@@ -1427,8 +1137,8 @@ export default function TeacherAssignmentsTab({ classRecord }) {
             type="button"
             onClick={() => setGradingFilter(period.value)}
             className={`rounded-full px-3 py-1.5 text-xs font-medium ${gradingFilter === period.value
-              ? "bg-cyan-700 text-white"
-              : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
+                ? "bg-cyan-700 text-white"
+                : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100"
               }`}
           >
             {period.label}
@@ -1436,10 +1146,22 @@ export default function TeacherAssignmentsTab({ classRecord }) {
         ))}
       </div>
 
-      {loading && <div className="flex min-h-64 items-center justify-center text-sm text-gray-400">Loading class activities...</div>}
+      {loading && (
+        <div className="flex min-h-64 items-center justify-center text-sm text-gray-400">
+          Loading class activities...
+        </div>
+      )}
       {!loading && visibleActivities.length === 0 && (
         <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
-          <div><ClipboardList className="mx-auto h-9 w-9 text-gray-300" /><h3 className="mt-3 font-semibold text-gray-800">No class activities yet</h3><p className="mt-1 text-sm text-gray-500">Create an activity and optionally attach instructions.</p></div>
+          <div>
+            <ClipboardList className="mx-auto h-9 w-9 text-gray-300" />
+            <h3 className="mt-3 font-semibold text-gray-800">
+              No class activities yet
+            </h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Create an activity and optionally attach instructions.
+            </p>
+          </div>
         </div>
       )}
       {!loading && visibleActivities.length > 0 && (
@@ -1448,25 +1170,20 @@ export default function TeacherAssignmentsTab({ classRecord }) {
             <ActivityCard
               key={activity.id}
               activity={activity}
+              onDownload={handleDownload}
               onEdit={openEditModal}
               onDelete={handleDelete}
               onViewSubmissions={(item) =>
-                setActivityWorkspace({
-                  mode: "submissions",
-                  activity: item,
-                })
+                setActivityWorkspace({ mode: "submissions", activity: item })
               }
               onManageQuiz={(item) =>
-                setActivityWorkspace({
-                  mode: "quiz",
-                  activity: item,
-                })
+                setActivityWorkspace({ mode: "quiz", activity: item })
               }
-              deleting={
-                deletingId === activity.id
-              }
+              deleting={deletingId === activity.id}
+              downloading={downloadingId === activity.id}
             />
-          ))}        </div>
+          ))}
+        </div>
       )}
 
       {modalMode && (
@@ -1480,13 +1197,13 @@ export default function TeacherAssignmentsTab({ classRecord }) {
         >
           <ActivityForm
             key={selected?.id || "new"}
+            classRecordId={classRecord.id}
             initialData={selected}
             students={students}
             studentsLoading={studentsLoading}
             studentsError={studentsError}
-            existingAccess={
-              existingStudentAccess
-            }
+            existingAccess={existingStudentAccess}
+            isEditing={modalMode === "edit"}
             saving={saving}
             error={actionError}
             onCancel={closeModal}
